@@ -5,6 +5,7 @@
 #include <linux/writeback.h>
 #include <linux/fs.h>
 #include <linux/backing-dev.h>
+#include <linux/uio.h>
 
 #include "nv_uvm_interface.h"
 #include "uvm8_api.h"
