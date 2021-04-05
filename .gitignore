@@ -10,4 +10,11 @@
 *.cmd
 bin/
 kernel
-
+*.o.ur-safe
+/kernel_nvidia/.cache.mk
+/kernel_nvidia/.tmp_versions/
+/kernel_nvidia/Module.symvers
+/kernel_nvidia/conftest/
+/kernel_nvidia/conftest*.c
+/kernel_nvidia/modules.order
+/kernel_nvidia/nv_compiler.h
