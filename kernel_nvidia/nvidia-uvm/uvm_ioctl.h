@@ -23,6 +23,7 @@
 #ifndef _UVM_IOCTL_H
 #define _UVM_IOCTL_H
 
+#include <linux/types.h>
 #include "uvmtypes.h"
 
 #ifdef __cplusplus
@@ -1051,6 +1052,47 @@ typedef struct
     NvProcessorUuid         gpuUuid;                                           // IN
     NV_STATUS               rmStatus;                                          // OUT
 } UVM_MAP_EXTERNAL_SPARSE_PARAMS;
+
+//
+// UvmNvmgpuInitialize
+//
+#define UVM_NVMGPU_INITIALIZE                                         UVM_IOCTL_BASE(1000)
+
+typedef struct
+{
+    unsigned long    trash_nr_blocks;           // IN
+    unsigned long    trash_reserved_nr_pages;   // IN
+    unsigned short   flags;                     // IN
+    NV_STATUS        rmStatus;                  // OUT
+} UVM_NVMGPU_INITIALIZE_PARAMS;
+
+//
+// UvmNvmgpuRegisterFileVaSpace
+//
+#define UVM_NVMGPU_REGISTER_FILE_VA_SPACE                             UVM_IOCTL_BASE(1001)
+
+typedef struct
+{
+    int             backing_fd;         // IN
+    void            *uvm_addr;          // IN
+    size_t          size;               // IN
+    unsigned short  flags;              // IN
+    NV_STATUS       rmStatus;           // OUT
+} UVM_NVMGPU_REGISTER_FILE_VA_SPACE_PARAMS;
+
+//
+// UvmNvmgpuRemap
+//
+#define UVM_NVMGPU_REMAP                                              UVM_IOCTL_BASE(1004)
+
+typedef struct
+{
+    int             backing_fd;         // IN
+    void            *uvm_addr;          // IN
+    size_t          size;               // IN
+    unsigned short  flags;              // IN
+    NV_STATUS       rmStatus;           // OUT
+} UVM_NVMGPU_REMAP_PARAMS;                          
 
 //
 // Temporary ioctls which should be removed before UVM 8 release

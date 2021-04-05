@@ -39,6 +39,7 @@
 #include "uvm8_ats_ibm.h"
 #include "uvm8_ats_faults.h"
 #include "uvm8_test.h"
+#include "uvm8_nvmgpu.h"
 
 // TODO: Bug 1881601: [uvm] Add fault handling overview for replayable and
 // non-replayable faults
@@ -1585,6 +1586,9 @@ static NV_STATUS service_fault_batch(uvm_gpu_t *gpu,
         if (invalidate_status != NV_OK)
             status = invalidate_status;
     }
+
+    if (uvm_nvmgpu_has_to_reclaim_blocks(&va_space->nvmgpu_va_space))
+        uvm_nvmgpu_reduce_memory_consumption(va_space);
 
 fail:
     if (va_space != NULL) {

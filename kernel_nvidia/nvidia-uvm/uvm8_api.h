@@ -253,4 +253,8 @@ NV_STATUS uvm_api_migrate_range_group(UVM_MIGRATE_RANGE_GROUP_PARAMS *params, st
 NV_STATUS uvm_api_alloc_semaphore_pool(UVM_ALLOC_SEMAPHORE_POOL_PARAMS *params, struct file *filp);
 NV_STATUS uvm_api_populate_pageable(const UVM_POPULATE_PAGEABLE_PARAMS *params, struct file *filp);
 
+NV_STATUS uvm_api_nvmgpu_initialize(UVM_NVMGPU_INITIALIZE_PARAMS *params, struct file *filp);
+NV_STATUS uvm_api_nvmgpu_register_file_va_space(UVM_NVMGPU_REGISTER_FILE_VA_SPACE_PARAMS *params, struct file *filp);
+NV_STATUS uvm_api_nvmgpu_remap(UVM_NVMGPU_REMAP_PARAMS *params, struct file *filp);
+
 #endif // __UVM8_API_H__

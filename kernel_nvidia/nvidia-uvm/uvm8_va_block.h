@@ -452,6 +452,9 @@ struct uvm_va_block_struct
     nv_kthread_q_item_t eviction_mappings_q_item;
 
     uvm_perf_module_data_desc_t perf_modules_data[UVM_PERF_MODULE_TYPE_COUNT];
+
+    bool nvmgpu_use_uvm_buffer;
+    struct list_head nvmgpu_lru;
 };
 
 // We define additional per-VA Block fields for testing. When
@@ -1348,6 +1351,11 @@ static void uvm_page_mask_region_clear_outside(uvm_page_mask_t *mask, uvm_va_blo
 static void uvm_page_mask_zero(uvm_page_mask_t *mask)
 {
     bitmap_zero(mask->bitmap, PAGES_PER_UVM_VA_BLOCK);
+}
+
+static void uvm_page_mask_fill(uvm_page_mask_t *mask)
+{
+    bitmap_fill(mask->bitmap, PAGES_PER_UVM_VA_BLOCK);
 }
 
 static bool uvm_page_mask_empty(const uvm_page_mask_t *mask)

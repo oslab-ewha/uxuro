@@ -42,6 +42,8 @@
 #include "uvm8_gpu_access_counters.h"
 #include "uvm8_test.h"
 
+#include "uvm8_nvmgpu.h"
+
 #define UVM_PROC_GPUS_PEER_DIR_NAME "peers"
 
 static void remove_gpu(uvm_gpu_t *gpu);
@@ -2833,3 +2835,27 @@ NV_STATUS uvm8_test_get_gpu_time(UVM_TEST_GET_GPU_TIME_PARAMS *params, struct fi
 
     return status;
 }
+
+NV_STATUS uvm_api_nvmgpu_initialize(UVM_NVMGPU_INITIALIZE_PARAMS *params, struct file *filp)
+{
+    uvm_va_space_t *va_space = uvm_va_space_get(filp);
+    return uvm_nvmgpu_initialize(
+        va_space, 
+        params->trash_nr_blocks,
+        params->trash_reserved_nr_pages,
+        params->flags
+    );
+}
+
+NV_STATUS uvm_api_nvmgpu_register_file_va_space(UVM_NVMGPU_REGISTER_FILE_VA_SPACE_PARAMS *params, struct file *filp)
+{
+    uvm_va_space_t *va_space = uvm_va_space_get(filp);
+    return uvm_nvmgpu_register_file_va_space(va_space, params);
+}
+
+NV_STATUS uvm_api_nvmgpu_remap(UVM_NVMGPU_REMAP_PARAMS *params, struct file *filp)
+{
+    uvm_va_space_t *va_space = uvm_va_space_get(filp);
+    return uvm_nvmgpu_remap(va_space, params);
+}
+

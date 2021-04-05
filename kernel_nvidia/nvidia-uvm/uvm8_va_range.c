@@ -1151,6 +1151,8 @@ NV_STATUS uvm_va_range_block_create(uvm_va_range_t *va_range, size_t index, uvm_
             uvm_va_block_release(block);
             block = old;
         }
+        else
+            INIT_LIST_HEAD(&block->nvmgpu_lru);
     }
 
     *out_block = block;

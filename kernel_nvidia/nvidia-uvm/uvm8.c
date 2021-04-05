@@ -35,6 +35,7 @@
 #include "uvm_linux_ioctl.h"
 #include "uvm8_hmm.h"
 #include "uvm8_mem.h"
+#include "uvm8_nvmgpu.h"
 
 #define NVIDIA_UVM_DEVICE_NAME          "nvidia-uvm"
 
@@ -191,9 +192,17 @@ static void uvm_destroy_vma_managed(struct vm_area_struct *vma, bool make_zombie
     uvm_for_each_va_range_in_vma_safe(va_range, va_range_next, vma) {
         // On exit_mmap (process teardown), current->mm is cleared so
         // uvm_va_range_vma_current would return NULL.
+        struct file *nvmgpu_file = va_range->node.nvmgpu_rtn.filp;
         UVM_ASSERT(uvm_va_range_vma(va_range) == vma);
         UVM_ASSERT(va_range->node.start >= vma->vm_start);
         UVM_ASSERT(va_range->node.end   <  vma->vm_end);
+
+        if (nvmgpu_file && (va_range->node.nvmgpu_rtn.flags & UVM_NVMGPU_FLAG_WRITE) && !(va_range->node.nvmgpu_rtn.flags & UVM_NVMGPU_FLAG_VOLATILE)) {
+            uvm_nvmgpu_flush(va_range);
+        }
+        if (nvmgpu_file)
+            uvm_nvmgpu_unregister_va_range(va_range);
+
         size += uvm_va_range_size(va_range);
         if (make_zombie)
             uvm_va_range_zombify(va_range);
@@ -568,6 +577,9 @@ static vm_fault_t uvm_vm_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
         status = uvm_va_block_cpu_fault(va_block, fault_addr, is_write, service_context);
     } while (status == NV_WARN_MORE_PROCESSING_REQUIRED);
 
+    if (uvm_nvmgpu_has_to_reclaim_blocks(&va_space->nvmgpu_va_space))
+        uvm_nvmgpu_reduce_memory_consumption(va_space);
+
     if (status != NV_OK) {
         UvmEventFatalReason reason;
 
@@ -935,6 +947,10 @@ static long uvm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_CLEAN_UP_ZOMBIE_RESOURCES,      uvm_api_clean_up_zombie_resources);
         UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_POPULATE_PAGEABLE,              uvm_api_populate_pageable);
         UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_VALIDATE_VA_RANGE,              uvm_api_validate_va_range);
+
+        UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_NVMGPU_INITIALIZE,              uvm_api_nvmgpu_initialize);
+        UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_NVMGPU_REGISTER_FILE_VA_SPACE,  uvm_api_nvmgpu_register_file_va_space);
+        UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_NVMGPU_REMAP,                   uvm_api_nvmgpu_remap);
     }
 
     // Try the test ioctls if none of the above matched
