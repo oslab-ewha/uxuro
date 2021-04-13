@@ -59,7 +59,7 @@ int main(int argc, char *argv[])
 
     if (argc != 5)
     {
-        fprintf(stderr, "Usage: %s file size_in_GiB threads_per_block seed\n", argv[0]);
+        fprintf(stderr, "Usage: %s file size_in_KB threads_per_block seed\n", argv[0]);
         return EXIT_SUCCESS;
     }
 
@@ -68,7 +68,7 @@ int main(int argc, char *argv[])
     seed = atoi(argv[4]);
     
     //total_size = ((size_t)1 << 30) * size_order;
-    total_size = (size_t)1000000000 * (size_t)size_order;
+    total_size = (size_t)1024 * (size_t)size_order;
     num_tblocks = total_size / sizeof(uint32_t) / num_threads;
 
     CUDA_CALL_SAFE(cudaEventCreate(&start_event));

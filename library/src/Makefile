@@ -4,11 +4,12 @@ CUDA_DIR ?= /usr/local/cuda
 
 INCLUDES = -I../include -I$(CUDA_DIR)/include
 CFLAGS = -fPIC -Wall -O3 -m64 $(GLIB_CFLAGS)
+LDFLAGS = -L$(CUDA_DIR)/lib64
 LIBS = -lcudart $(GLIB_LIBS)
 DEFS = -D_GNU_SOURCE
 
 all: dragon.c ../include/dragon.h
-	gcc -shared -o libdragon.so $(INCLUDES) $(CFLAGS) $(DEFS) dragon.c
+	gcc -shared -o libdragon.so $(INCLUDES) $(CFLAGS) $(DEFS) $(LDFLAGS) dragon.c $(LIBS)
 	mkdir -p ../lib64/
 	mv libdragon.so ../lib64/
 
