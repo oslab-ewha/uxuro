@@ -544,6 +544,37 @@ out:
     return error;
 }
 
+static bool
+fill_pagecaches_for_read(struct file *nvmgpu_file, uvm_va_block_t *va_block, uvm_va_block_region_t region)
+{
+    struct inode *inode = nvmgpu_file->f_mapping->host;
+    loff_t isize;
+    uvm_page_mask_t read_mask;
+    int page_id;
+    // Calculate the file offset based on the block start address.
+    loff_t file_start_offset = va_block->start - va_block->va_range->node.start;
+
+    uvm_page_mask_fill(&read_mask);
+
+    isize = i_size_read(inode);
+
+    // Fill in page-cache pages to va_block
+    for_each_va_block_page_in_region_mask(page_id, &read_mask, region) {
+        loff_t offset = file_start_offset + page_id * PAGE_SIZE;
+
+	if (unlikely(offset >= isize))
+	    break;
+        if (prepare_page_for_read(nvmgpu_file, offset, va_block, page_id) != 0) {
+            printk(KERN_DEBUG "Cannot prepare page for read at file offset 0x%llx\n", offset);
+	    return false;
+        }
+
+        UVM_ASSERT(va_block->cpu.pages[page_id]);
+    }
+
+    return true;
+}
+
 /**
  * Prepare page-cache pages to be read.
  *
@@ -566,16 +597,8 @@ NV_STATUS uvm_nvmgpu_read_begin(uvm_va_block_t *va_block, uvm_va_block_retry_t *
 
     struct file *nvmgpu_file = nvmgpu_rtn->filp;
 
-    // Calculate the file offset based on the block start address.
-    loff_t file_start_offset = va_block->start - va_block->va_range->node.start;
-    loff_t offset;
-
-    int page_id; 
-
     // Specify that the entire block is the region of concern.
     uvm_va_block_region_t region = uvm_va_block_region(0, (va_block->end - va_block->start + 1) / PAGE_SIZE);
-
-    uvm_page_mask_t read_mask;
 
     // Record the original page mask and set the mask to all 1s.
     uvm_page_mask_t original_page_mask;
@@ -617,22 +640,12 @@ NV_STATUS uvm_nvmgpu_read_begin(uvm_va_block_t *va_block, uvm_va_block_retry_t *
         }
     }
 
-    uvm_page_mask_fill(&read_mask);
-
-    // Fill in page-cache pages to va_block
-    for_each_va_block_page_in_region_mask(page_id, &read_mask, region) {
-        offset = file_start_offset + page_id * PAGE_SIZE;
-
-        if (prepare_page_for_read(nvmgpu_file, offset, va_block, page_id) != 0) {
-            printk(KERN_DEBUG "Cannot prepare page for read at file offset 0x%llx\n", offset);
-            status = NV_ERR_OPERATING_SYSTEM;
-            goto read_begin_err_0;
-        }
-
-        UVM_ASSERT(va_block->cpu.pages[page_id]);
+    if (fill_pagecaches_for_read(nvmgpu_file, va_block, region)) {
+        uvm_nvmgpu_block_set_has_data(va_block);
     }
-
-    uvm_nvmgpu_block_set_has_data(va_block);
+    else {
+        status = NV_ERR_OPERATING_SYSTEM;
+    }
 
 read_begin_err_0:
     // Put back the original mask.
