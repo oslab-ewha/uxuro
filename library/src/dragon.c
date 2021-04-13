@@ -42,6 +42,9 @@
 static int nvidia_uvm_fd = -1;
 static int fadvice = -1;
 
+static int minsize = MIN_SIZE;
+static int disabled_dragon = 0;
+
 static GHashTable *addr_map;
 
 typedef struct
@@ -98,6 +101,17 @@ static dragonError_t init_module()
         return D_ERR_UVM;
     }
 
+    env_val = secure_getenv("DRAGON_MINSIZE");
+    if (env_val) {
+       sscanf(env_val, "%u", &minsize);
+    }
+
+    env_val = secure_getenv("NO_DRAGON");
+    if (env_val) {
+        disabled_dragon = 1;
+	goto out;
+    }
+
     request.trash_nr_blocks = DEFAULT_TRASH_NR_BLOCKS;
     request.trash_reserved_nr_pages = DEFAULT_TRASH_NR_RESERVED_PAGES;
     request.flags = 0;
@@ -146,40 +160,128 @@ static dragonError_t init_module()
         return D_ERR_IOCTL;
     }
 
+out:
     addr_map = g_hash_table_new(NULL, NULL);
 
     return D_OK;
 }
 
-dragonError_t dragon_map(const char *filename, size_t size, unsigned short flags, void **addr)
+#define BUFSIZE	(1024 * 4)
+
+static dragonError_t
+fillup_from_file(dragon_ioctl_map_t *request)
+{
+    size_t size;
+    unsigned char *addr;
+
+    if (!(request->flags & D_F_READ))
+        return D_OK;
+
+    addr = (unsigned char *)request->uvm_addr;
+    size = request->size;
+    while (size > 0)
+    {
+        char buf[BUFSIZE];
+        int nread = BUFSIZE;
+
+        if (nread > size)
+            nread = size;
+	nread = read(request->backing_fd, buf, nread);
+	if (nread == 0)
+            break;
+	memcpy(addr, buf, nread);
+	addr += nread;
+        size -= nread;
+    }
+
+    return D_OK;
+}
+
+static void
+flush_to_file(dragon_ioctl_map_t *request)
+{
+    size_t size;
+    unsigned char *addr;
+
+    if (!(request->flags & D_F_WRITE))
+        return;
+
+    addr = (unsigned char *)request->uvm_addr;
+    size = request->size;
+    while (size > 0)
+    {
+        char buf[BUFSIZE];
+        int nwrite = BUFSIZE;
+
+        if (nwrite > size)
+            nwrite = size;
+
+	memcpy(buf, addr, nwrite);
+	nwrite = write(request->backing_fd, buf, nwrite);
+	if (nwrite == 0)
+            break;
+	addr += nwrite;
+        size -= nwrite;
+    }
+}
+
+static dragonError_t
+do_dragon_map(dragon_ioctl_map_t *request)
+{
+    int status;
+
+    if ((request->flags & D_F_READ) && !(request->flags & D_F_VOLATILE))
+    {
+        if ((status = posix_fadvise(request->backing_fd, 0, 0, fadvice)) != 0)
+            fprintf(stderr, "fadvise error: %d\n", status);
+        if ((fadvice == POSIX_FADV_SEQUENTIAL) && readahead(request->backing_fd, 0, request->size) != 0)
+            fprintf(stderr, "readahead error.\n");
+    }
+
+    if ((status = ioctl(nvidia_uvm_fd, DRAGON_IOCTL_MAP, request)) != 0)
+    {
+        fprintf(stderr, "ioctl error: %d\n", status);
+	return D_ERR_IOCTL;
+    }
+
+    return D_OK;
+}
+
+static void free_request(dragon_ioctl_map_t *request)
+{
+    close(request->backing_fd);
+    cudaFree(request->uvm_addr);
+    free(request);
+}
+
+dragonError_t dragon_map(const char *filename, size_t size, unsigned short flags, void **paddr)
 {
     int f_flags = 0;
     int f_fd;
     dragon_ioctl_map_t *request;
     cudaError_t error;
-    int status;
     int ret = D_OK;
 
     if ((request = (dragon_ioctl_map_t *)calloc(1, sizeof(dragon_ioctl_map_t))) == NULL)
     {
         fprintf(stderr, "Cannot calloc dragon_ioctl_map_t\n");
-        ret = D_ERR_MEM;
-        goto _out_err_0;
+	return D_ERR_MEM;
     }
 
-    error = cudaMallocManaged(&request->uvm_addr, size >= MIN_SIZE ? size : MIN_SIZE, cudaMemAttachGlobal);
+    error = cudaMallocManaged(paddr, size >= minsize ? size : minsize, cudaMemAttachGlobal);
     if (error != cudaSuccess)
     {
         fprintf(stderr, "cudaMallocManaged error: %s %s\n", cudaGetErrorName(error), cudaGetErrorString(error));
-        ret = D_ERR_UVM;
-        goto _out_err_1;
+        return D_ERR_UVM;
     }
 
     if (nvidia_uvm_fd < 0)
     {
         ret = init_module();
-        if (ret != D_OK)
-            goto _out_err_2;
+        if (ret != D_OK) {
+            cudaFree(*paddr);
+	    return ret;
+	}
     }
 
     f_flags = O_RDWR | O_LARGEFILE;
@@ -189,51 +291,38 @@ dragonError_t dragon_map(const char *filename, size_t size, unsigned short flags
             close(f_fd);
     }
 
-    if ((request->backing_fd = open(filename, f_flags)) < 0)
+    if ((f_fd = open(filename, f_flags)) < 0)
     {
         fprintf(stderr, "Cannot open the file %s\n", filename);
         ret = D_ERR_FILE;
-        goto _out_err_2;
+	cudaFree(*paddr);
+	return ret;
     }
 
-    if ((flags & D_F_CREATE) && ftruncate(request->backing_fd, size) != 0)
+    if ((flags & D_F_CREATE) && ftruncate(f_fd, size) != 0)
     {
         fprintf(stderr, "Cannot truncate the file %s\n", filename);
         ret = D_ERR_FILE;
-        goto _out_err_3;
+	close(f_fd);
+	cudaFree(*paddr);
+	return ret;
     }
 
-    request->flags = flags;
+    request->backing_fd = f_fd;
+    request->uvm_addr = *paddr;
     request->size = size;
+    request->flags = flags;
 
-    if ((flags & D_F_READ) && !(flags & D_F_VOLATILE))
-    {
-        if ((status = posix_fadvise(request->backing_fd, 0, 0, fadvice)) != 0)
-            fprintf(stderr, "fadvise error: %d\n", status);
-        if ((fadvice == POSIX_FADV_SEQUENTIAL) && readahead(request->backing_fd, 0, size) != 0)
-            fprintf(stderr, "readahead error.\n");
-    }
+    if (disabled_dragon)
+        ret = fillup_from_file(request);
+    else
+        ret = do_dragon_map(request);
 
-    if ((status = ioctl(nvidia_uvm_fd, DRAGON_IOCTL_MAP, request)) != 0)
-    {
-        fprintf(stderr, "ioctl error: %d\n", status);
-        ret = D_ERR_IOCTL;
-        goto _out_err_3;
-    }
+    if (ret == D_OK)
+        g_hash_table_insert(addr_map, request->uvm_addr, request);
+    else
+	free_request(request);
 
-    *addr = request->uvm_addr;
-
-    g_hash_table_insert(addr_map, request->uvm_addr, request);
-
-    return D_OK;
-
-_out_err_3:
-    close(request->backing_fd);
-_out_err_2:
-    cudaFree(request->uvm_addr);
-_out_err_1:
-    free(request);
-_out_err_0:
     return ret;
 }
 
@@ -286,16 +375,16 @@ dragonError_t dragon_unmap(void *addr)
         return D_ERR_INTVAL;
     }
 
-    cudaFree(addr);
-
-    if ((request->flags & D_F_WRITE) && !(request->flags & D_F_VOLATILE))
-        fsync(request->backing_fd);
-
-    close(request->backing_fd);
+    if (disabled_dragon) {
+        flush_to_file(request);
+    }
+    else {
+        if ((request->flags & D_F_WRITE) && !(request->flags & D_F_VOLATILE))
+             fsync(request->backing_fd);
+    }
 
     g_hash_table_remove(addr_map, addr);
-    free(request);
+    free_request(request);
 
     return D_OK;
 }
-
