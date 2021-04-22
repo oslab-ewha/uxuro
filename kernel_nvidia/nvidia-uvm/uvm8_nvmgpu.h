@@ -32,6 +32,8 @@ NV_STATUS uvm_nvmgpu_reduce_memory_consumption(uvm_va_space_t *va_space);
 
 NV_STATUS uvm_nvmgpu_prepare_block_for_hostbuf(uvm_va_block_t *va_block);
 
+struct page *assign_pagecache(uvm_va_block_t *block, uvm_page_index_t page_index);
+
 /**
  * Is this va_range managed by nvmgpu driver?
  *
@@ -168,9 +170,10 @@ static inline void uvm_nvmgpu_block_mark_recent_in_buffer(uvm_va_block_t *va_blo
     uvm_nvmgpu_va_space_t *nvmgpu_va_space = &va_block->va_range->va_space->nvmgpu_va_space;
     
     // Move this block to the tail of the LRU list.
-    uvm_mutex_lock(&nvmgpu_va_space->lock);
+    // mutex locking is commented out. It has been already held.
+//    uvm_mutex_lock(&nvmgpu_va_space->lock);
     list_move_tail(&va_block->nvmgpu_lru, &nvmgpu_va_space->lru_head);
-    uvm_mutex_unlock(&nvmgpu_va_space->lock);
+//    uvm_mutex_unlock(&nvmgpu_va_space->lock);
 }
 
 #endif

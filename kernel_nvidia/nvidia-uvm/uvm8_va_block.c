@@ -846,6 +846,32 @@ static void block_unmap_indirect_peers_from_gpu_chunk(uvm_va_block_t *block, uvm
         block_sysmem_mappings_remove_gpu_chunk(gpu, chunk, peer_gpu);
 }
 
+static struct page *
+assign_page(uvm_va_block_t *block, bool zero)
+{
+    struct page *page;
+    gfp_t gfp_flags;
+
+    gfp_flags = NV_UVM_GFP_FLAGS | GFP_HIGHUSER;
+    if (zero)
+        gfp_flags |= __GFP_ZERO;
+
+    page = alloc_pages(gfp_flags, 0);
+    if (!page) {
+        uvm_nvmgpu_reduce_memory_consumption(block->va_range->va_space);
+
+        page = alloc_pages(gfp_flags, 0);
+        if (!page)
+            return NULL;
+    }
+
+    // the kernel has 'written' zeros to this page, so it is dirty
+    if (zero)
+        SetPageDirty(page);
+
+    return page;
+}
+
 // Allocates the input page in the block, if it doesn't already exist
 //
 // Also maps the page for physical access by all GPUs used by the block, which
@@ -854,7 +880,6 @@ static NV_STATUS block_populate_page_cpu(uvm_va_block_t *block, uvm_page_index_t
 {
     NV_STATUS status;
     struct page *page;
-    gfp_t gfp_flags;
     uvm_va_block_test_t *block_test = uvm_va_block_get_test(block);
 
     if (block->cpu.pages[page_index])
@@ -867,22 +892,16 @@ static NV_STATUS block_populate_page_cpu(uvm_va_block_t *block, uvm_page_index_t
     if (block_test && block_test->inject_cpu_pages_allocation_error)
         return NV_ERR_NO_MEMORY;
 
-    gfp_flags = NV_UVM_GFP_FLAGS | GFP_HIGHUSER;
-    if (zero)
-        gfp_flags |= __GFP_ZERO;
-
-    page = alloc_pages(gfp_flags, 0);
-    if (!page) {
-        uvm_nvmgpu_reduce_memory_consumption(block->va_range->va_space);
-
-        page = alloc_pages(gfp_flags, 0);
-        if (!page)
-            return NV_ERR_NO_MEMORY;
+    if (uvm_nvmgpu_is_managed(block->va_range) && uvm_nvmgpu_block_file_dirty(block) &&
+	!(block->va_range->node.nvmgpu_rtn.flags & (UVM_NVMGPU_FLAG_VOLATILE | UVM_NVMGPU_FLAG_USEHOSTBUF))) {
+        page = assign_pagecache(block, page_index);
+    }
+    else {
+        page = assign_page(block, zero);
     }
 
-    // the kernel has 'written' zeros to this page, so it is dirty
-    if (zero)
-        SetPageDirty(page);
+    if (page == NULL)
+        return NV_ERR_NO_MEMORY;
 
     status = block_map_phys_cpu_page_on_gpus(block, page_index, page);
     if (status != NV_OK)
@@ -1923,25 +1942,17 @@ static NV_STATUS block_populate_pages(uvm_va_block_t *block,
     if (UVM_ID_IS_GPU(dest_id))
         return block_populate_pages_gpu(block, retry, block_get_gpu(block, dest_id), region, populate_page_mask);
 
-    if (!uvm_nvmgpu_is_managed(block->va_range)
-        || (!uvm_nvmgpu_block_file_dirty(block)
-            && ((block->va_range->node.nvmgpu_rtn.flags & UVM_NVMGPU_FLAG_VOLATILE)
-                || (block->va_range->node.nvmgpu_rtn.flags & UVM_NVMGPU_FLAG_USEHOSTBUF))
-        )
-    ) {
-        for_each_va_block_page_in_region_mask(page_index, populate_page_mask, region) {
-            uvm_processor_mask_t resident_on;
-            bool resident_somewhere;
-            uvm_va_block_page_resident_processors(block, page_index, &resident_on);
-            resident_somewhere = !uvm_processor_mask_empty(&resident_on);
+    for_each_va_block_page_in_region_mask(page_index, populate_page_mask, region) {
+        uvm_processor_mask_t resident_on;
+        bool resident_somewhere;
+        uvm_va_block_page_resident_processors(block, page_index, &resident_on);
+        resident_somewhere = !uvm_processor_mask_empty(&resident_on);
 
-            // For pages not resident anywhere, need to populate with zeroed memory
-            status = block_populate_page_cpu(block, page_index, !resident_somewhere);
-            if (status != NV_OK)
-                return status;
-        }
+        // For pages not resident anywhere, need to populate with zeroed memory
+        status = block_populate_page_cpu(block, page_index, !resident_somewhere);
+        if (status != NV_OK)
+            return status;
     }
-
     return NV_OK;
 }
 

@@ -544,6 +544,254 @@ out:
     return error;
 }
 
+/**
+ * copied from prepare_page_for_read. Ugly but keeping dragon codes as much as possble.
+ */
+static struct page *prepare_page_for_read2(struct file *filp, loff_t ppos, uvm_va_block_t *va_block, int page_id)
+{
+    struct address_space *mapping = filp->f_mapping;
+    struct inode *inode = mapping->host;
+    struct file_ra_state *ra = &filp->f_ra;
+    pgoff_t index;
+    pgoff_t last_index;
+    pgoff_t prev_index;
+    unsigned long offset;      /* offset into pagecache page */
+    unsigned int prev_offset;
+    struct page *page = NULL;
+    int error = 0;
+
+    index = ppos >> PAGE_SHIFT;
+    prev_index = ra->prev_pos >> PAGE_SHIFT;
+    prev_offset = ra->prev_pos & (PAGE_SIZE-1);
+    last_index = (ppos + PAGE_SIZE + PAGE_SIZE-1) >> PAGE_SHIFT;
+    offset = ppos & ~PAGE_MASK;
+
+    for (;;) {
+        pgoff_t end_index;
+        loff_t isize;
+        unsigned long nr;
+
+        cond_resched();
+find_page:
+        if (fatal_signal_pending(current)) {
+            error = -EINTR;
+            goto out;
+        }
+
+        page = find_get_page(mapping, index);
+        if (!page) {
+            page_cache_sync_readahead(mapping,
+                    ra, filp,
+                    index, last_index - index);
+            page = find_get_page(mapping, index);
+            if (unlikely(page == NULL))
+                goto no_cached_page;
+        }
+        if (PageReadahead(page)) {
+            page_cache_async_readahead(mapping,
+                    ra, filp, page,
+                    index, last_index - index);
+        }
+        if (!PageUptodate(page)) {
+            /*
+             * See comment in do_read_cache_page on why
+             * wait_on_page_locked is used to avoid unnecessarily
+             * serialisations and why it's safe.
+             */
+            error = wait_on_page_locked_killable(page);
+            if (unlikely(error))
+                goto readpage_error;
+            if (PageUptodate(page))
+                goto page_ok;
+
+            if (inode->i_blkbits == PAGE_SHIFT ||
+                    !mapping->a_ops->is_partially_uptodate)
+                goto page_not_up_to_date;
+            if (!trylock_page(page))
+                goto page_not_up_to_date;
+            /* Did it get truncated before we got the lock? */
+            if (!page->mapping)
+                goto page_not_up_to_date_locked;
+            if (!mapping->a_ops->is_partially_uptodate(page,
+                        offset, PAGE_SIZE))
+                goto page_not_up_to_date_locked;
+            unlock_page(page);
+        }
+page_ok:
+        /*
+         * i_size must be checked after we know the page is Uptodate.
+         *
+         * Checking i_size after the check allows us to calculate
+         * the correct value for "nr", which means the zero-filled
+         * part of the page is not copied back to userspace (unless
+         * another truncate extends the file - this is desired though).
+         */
+
+        isize = i_size_read(inode);
+        end_index = (isize - 1) >> PAGE_SHIFT;
+        if (unlikely(!isize || index > end_index)) {
+            put_page(page);
+            goto out;
+        }
+
+        /* nr is the maximum number of bytes to copy from this page */
+        nr = PAGE_SIZE;
+        if (index == end_index) {
+            nr = ((isize - 1) & ~PAGE_MASK) + 1;
+            if (nr <= offset) {
+                put_page(page);
+                goto out;
+            }
+        }
+        nr = nr - offset;
+
+        /* If users can be writing to this page using arbitrary
+         * virtual addresses, take care about potential aliasing
+         * before reading the page on the kernel side.
+         */
+        if (mapping_writably_mapped(mapping))
+            flush_dcache_page(page);
+
+        /*
+         * When a sequential read accesses a page several times,
+         * only mark it as accessed the first time.
+         */
+        if (prev_index != index || offset != prev_offset)
+            mark_page_accessed(page);
+        prev_index = index;
+
+#if 0////TODO
+        /*
+         * Ok, we have the page, and it's up-to-date, so
+         * now we can insert it to the va_block...
+         */
+        ret = insert_pagecache_to_va_block(va_block, page_id, page);
+        if (ret != NV_OK) {
+            error = ret;
+            goto out;
+        }
+#endif
+        offset += PAGE_SIZE;
+        index += offset >> PAGE_SHIFT;
+        offset &= ~PAGE_MASK;
+        prev_offset = offset;
+
+        goto out;
+
+page_not_up_to_date:
+        /* Get exclusive access to the page ... */
+        error = lock_page_killable(page);
+        if (unlikely(error))
+            goto readpage_error;
+
+page_not_up_to_date_locked:
+        /* Did it get truncated before we got the lock? */
+        if (!page->mapping) {
+            unlock_page(page);
+            put_page(page);
+            continue;
+        }
+
+        /* Did somebody else fill it already? */
+        if (PageUptodate(page)) {
+            unlock_page(page);
+            goto page_ok;
+        }
+
+readpage:
+        /*
+         * A previous I/O error may have been due to temporary
+         * failures, eg. multipath errors.
+         * PG_error will be set again if readpage fails.
+         */
+        ClearPageError(page);
+        /* Start the actual read. The read will unlock the page. */
+        error = mapping->a_ops->readpage(filp, page);
+
+        if (unlikely(error)) {
+            if (error == AOP_TRUNCATED_PAGE) {
+                put_page(page);
+                error = 0;
+                goto find_page;
+            }
+            goto readpage_error;
+        }
+
+        if (!PageUptodate(page)) {
+            error = lock_page_killable(page);
+            if (unlikely(error))
+                goto readpage_error;
+            if (!PageUptodate(page)) {
+                if (page->mapping == NULL) {
+                    /*
+                     * invalidate_mapping_pages got it
+                     */
+                    unlock_page(page);
+                    put_page(page);
+                    goto find_page;
+                }
+                unlock_page(page);
+                ra->ra_pages /= 4;
+                error = -EIO;
+                goto readpage_error;
+            }
+            unlock_page(page);
+        }
+
+        goto page_ok;
+
+readpage_error:
+        /* UHHUH! A synchronous read error occurred. Report it */
+        put_page(page);
+        goto out;
+
+no_cached_page:
+        /*
+         * Ok, it wasn't cached, so we need to create a new
+         * page..
+         */
+        page = page_cache_alloc(mapping);
+        if (!page) {
+            error = -ENOMEM;
+            goto out;
+        }
+        error = add_to_page_cache_lru(page, mapping, index,
+                mapping_gfp_constraint(mapping, GFP_KERNEL));
+        if (error) {
+            put_page(page);
+            if (error == -EEXIST) {
+                error = 0;
+                goto find_page;
+            }
+            goto out;
+        }
+        goto readpage;
+    }
+
+    error = -EAGAIN;
+out:
+    ra->prev_pos = prev_index;
+    ra->prev_pos <<= PAGE_SHIFT;
+    ra->prev_pos |= prev_offset;
+
+    file_accessed(filp);
+    return page;
+}
+
+struct page *
+assign_pagecache(uvm_va_block_t *block, uvm_page_index_t page_index)
+{
+    uvm_va_range_t *va_range = block->va_range;
+    uvm_nvmgpu_range_tree_node_t *nvmgpu_rtn = &va_range->node.nvmgpu_rtn;
+    struct file *nvmgpu_file = nvmgpu_rtn->filp;
+    loff_t file_start_offset = block->start - block->va_range->node.start;
+    loff_t offset;
+    int page_id = page_index;
+
+    offset = file_start_offset + page_id * PAGE_SIZE;
+    return prepare_page_for_read2(nvmgpu_file, offset, block, page_id);
+}
+
 static bool
 fill_pagecaches_for_read(struct file *nvmgpu_file, uvm_va_block_t *va_block, uvm_va_block_region_t region)
 {
@@ -575,6 +823,20 @@ fill_pagecaches_for_read(struct file *nvmgpu_file, uvm_va_block_t *va_block, uvm
     return true;
 }
 
+static uvm_page_index_t
+get_region_readable_outer(uvm_va_block_t *va_block, struct file *nvmgpu_file)
+{
+    uvm_page_index_t outer =  (va_block->end - va_block->start + 1) >> PAGE_SHIFT;
+    uvm_page_index_t outer_max;
+    struct inode *inode = nvmgpu_file->f_mapping->host;
+    loff_t len_remain = i_size_read(inode) - (va_block->start - va_block->va_range->node.start);
+
+    outer_max = len_remain >> PAGE_SHIFT;
+    if (outer > outer_max)
+        return outer_max;
+    return outer;
+}
+
 /**
  * Prepare page-cache pages to be read.
  *
@@ -598,13 +860,15 @@ NV_STATUS uvm_nvmgpu_read_begin(uvm_va_block_t *va_block, uvm_va_block_retry_t *
     struct file *nvmgpu_file = nvmgpu_rtn->filp;
 
     // Specify that the entire block is the region of concern.
-    uvm_va_block_region_t region = uvm_va_block_region(0, (va_block->end - va_block->start + 1) / PAGE_SIZE);
+    uvm_va_block_region_t region = uvm_va_block_region(0, get_region_readable_outer(va_block, nvmgpu_file));
 
+    uvm_page_mask_t my_mask;
     // Record the original page mask and set the mask to all 1s.
     uvm_page_mask_t original_page_mask;
     uvm_page_mask_copy(&original_page_mask, &service_context->block_context.make_resident.page_mask);
 
-    uvm_page_mask_fill(&service_context->block_context.make_resident.page_mask);
+    uvm_page_mask_init_from_region(&service_context->block_context.make_resident.page_mask, region, NULL);
+    uvm_page_mask_copy(&my_mask, &service_context->block_context.make_resident.page_mask);
 
     UVM_ASSERT(nvmgpu_file != NULL);
 
@@ -620,7 +884,7 @@ NV_STATUS uvm_nvmgpu_read_begin(uvm_va_block_t *va_block, uvm_va_block_retry_t *
                                             &service_context->block_context,
                                             UVM_ID_CPU,
                                             region,
-                                            NULL,
+                                            &my_mask,
                                             NULL,
                                             UVM_MAKE_RESIDENT_CAUSE_NVMGPU);
 
@@ -707,6 +971,7 @@ NV_STATUS uvm_nvmgpu_flush_block(uvm_va_block_t *va_block)
         )
             uvm_nvmgpu_block_set_file_dirty(va_block);
 
+	uvm_mutex_lock(&va_block->lock);
         // Move data resided on the GPU to host.
         // Data is automatically moved to the file if UVM_NVMGPU_FLAG_USEHOSTBUF is unset.
         status = uvm_va_block_migrate_locked(
@@ -718,6 +983,7 @@ NV_STATUS uvm_nvmgpu_flush_block(uvm_va_block_t *va_block)
             UVM_MIGRATE_MODE_MAKE_RESIDENT, 
             NULL
         );
+	uvm_mutex_unlock(&va_block->lock);
 
         uvm_va_block_context_free(block_context);
 
