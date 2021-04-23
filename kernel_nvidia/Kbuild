@@ -56,6 +56,10 @@ always :=
 $(foreach _module, $(NV_KERNEL_MODULES), \
  $(eval include $(src)/$(_module)/$(_module).Kbuild))
 
+ EXTRA_CFLAGS += -g -DDDDD -DDEBUG
+ifneq ($(DEBUG),)
+ EXTRA_CFLAGS += -g -DDEBUG
+endif
 
 #
 # Define CFLAGS that apply to all the NVIDIA kernel modules. EXTRA_CFLAGS
