@@ -5575,7 +5575,7 @@ fi
 done
 
 
-ac_config_files="$ac_config_files Makefile library/src/Makefile examples/Makefile examples/backprop/Makefile examples/backprop/programs/lib/Makefile examples/backprop/programs/cudamemcpy/Makefile examples/backprop/programs/uvm/Makefile examples/backprop/programs/hostreg/Makefile examples/backprop/programs/nvmgpu/Makefile"
+ac_config_files="$ac_config_files Makefile library/src/Makefile examples/Makefile examples/backprop/Makefile"
 
 
 cat >confcache <<\_ACEOF
@@ -6329,11 +6329,6 @@ do
     "library/src/Makefile") CONFIG_FILES="$CONFIG_FILES library/src/Makefile" ;;
     "examples/Makefile") CONFIG_FILES="$CONFIG_FILES examples/Makefile" ;;
     "examples/backprop/Makefile") CONFIG_FILES="$CONFIG_FILES examples/backprop/Makefile" ;;
-    "examples/backprop/programs/lib/Makefile") CONFIG_FILES="$CONFIG_FILES examples/backprop/programs/lib/Makefile" ;;
-    "examples/backprop/programs/cudamemcpy/Makefile") CONFIG_FILES="$CONFIG_FILES examples/backprop/programs/cudamemcpy/Makefile" ;;
-    "examples/backprop/programs/uvm/Makefile") CONFIG_FILES="$CONFIG_FILES examples/backprop/programs/uvm/Makefile" ;;
-    "examples/backprop/programs/hostreg/Makefile") CONFIG_FILES="$CONFIG_FILES examples/backprop/programs/hostreg/Makefile" ;;
-    "examples/backprop/programs/nvmgpu/Makefile") CONFIG_FILES="$CONFIG_FILES examples/backprop/programs/nvmgpu/Makefile" ;;
 
   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5;;
   esac

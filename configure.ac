@@ -40,11 +40,6 @@ AC_CONFIG_FILES([Makefile
                  library/src/Makefile
                  examples/Makefile
 		 examples/backprop/Makefile
-		 examples/backprop/programs/lib/Makefile
-		 examples/backprop/programs/cudamemcpy/Makefile
-		 examples/backprop/programs/uvm/Makefile
-		 examples/backprop/programs/hostreg/Makefile
-		 examples/backprop/programs/nvmgpu/Makefile
 		 ])
 
 AC_OUTPUT
