@@ -14,8 +14,6 @@
 
 @SET_MAKE@
 
-#SUBDIRS = programs/lib programs/cudamemcpy programs/uvm programs/hostreg programs/nvmgpu
-
 VPATH = @srcdir@
 am__is_gnu_make = { \
   if test -z '$(MAKELEVEL)'; then \
@@ -106,41 +104,38 @@ PROGRAMS = $(noinst_PROGRAMS)
 am__objects_1 = backprop_train.$(OBJEXT) \
 	backprop_cudamemcpy-backprop.$(OBJEXT) \
 	backprop_cudamemcpy-bpnn.$(OBJEXT) \
-	backprop_cudamemcpy-cudaio.$(OBJEXT) \
-	backprop_cudamemcpy-timer.$(OBJEXT)
+	backprop_cudamemcpy-cudaio.$(OBJEXT)
 am_backprop_cudamemcpy_OBJECTS = $(am__objects_1)
 backprop_cudamemcpy_OBJECTS = $(am_backprop_cudamemcpy_OBJECTS)
-backprop_cudamemcpy_DEPENDENCIES =
+am__DEPENDENCIES_1 = ../common/libutil.a
+backprop_cudamemcpy_DEPENDENCIES = $(am__DEPENDENCIES_1)
 am__objects_2 = backprop_train.$(OBJEXT) \
 	backprop_hostreg-backprop.$(OBJEXT) \
 	backprop_hostreg-bpnn.$(OBJEXT) \
-	backprop_hostreg-cudaio.$(OBJEXT) \
-	backprop_hostreg-timer.$(OBJEXT)
+	backprop_hostreg-cudaio.$(OBJEXT)
 am_backprop_hostreg_OBJECTS = $(am__objects_2)
 backprop_hostreg_OBJECTS = $(am_backprop_hostreg_OBJECTS)
-backprop_hostreg_DEPENDENCIES =
+backprop_hostreg_DEPENDENCIES = $(am__DEPENDENCIES_1)
 am__objects_3 = backprop_train.$(OBJEXT) \
 	backprop_nvmgpu-backprop.$(OBJEXT) \
 	backprop_nvmgpu-bpnn.$(OBJEXT) \
-	backprop_nvmgpu-cudaio.$(OBJEXT) \
-	backprop_nvmgpu-timer.$(OBJEXT)
+	backprop_nvmgpu-cudaio.$(OBJEXT)
 am_backprop_nvmgpu_OBJECTS = $(am__objects_3)
 backprop_nvmgpu_OBJECTS = $(am_backprop_nvmgpu_OBJECTS)
-am__DEPENDENCIES_1 =
-backprop_nvmgpu_DEPENDENCIES = $(top_srcdir)/library/src/libdragon.a \
-	$(am__DEPENDENCIES_1)
+am__DEPENDENCIES_2 =
+backprop_nvmgpu_DEPENDENCIES = $(am__DEPENDENCIES_1) \
+	$(top_srcdir)/library/src/libdragon.a $(am__DEPENDENCIES_2)
 am__objects_4 = backprop_train.$(OBJEXT) \
 	backprop_uvm-backprop.$(OBJEXT) backprop_uvm-bpnn.$(OBJEXT) \
-	backprop_uvm-cudaio.$(OBJEXT) backprop_uvm-timer.$(OBJEXT)
+	backprop_uvm-cudaio.$(OBJEXT)
 am_backprop_uvm_OBJECTS = $(am__objects_4)
 backprop_uvm_OBJECTS = $(am_backprop_uvm_OBJECTS)
-backprop_uvm_DEPENDENCIES =
+backprop_uvm_DEPENDENCIES = $(am__DEPENDENCIES_1)
 am__objects_5 = backprop_train.$(OBJEXT) generator-backprop.$(OBJEXT) \
-	generator-bpnn.$(OBJEXT) generator-cudaio.$(OBJEXT) \
-	generator-timer.$(OBJEXT)
+	generator-bpnn.$(OBJEXT) generator-cudaio.$(OBJEXT)
 am_generator_OBJECTS = $(am__objects_5) generator-generator.$(OBJEXT)
 generator_OBJECTS = $(am_generator_OBJECTS)
-generator_DEPENDENCIES =
+generator_DEPENDENCIES = $(am__DEPENDENCIES_1)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -313,26 +308,29 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 CLEANFILES = *~
 DISTCLEANFILES = *~
-SRCS = backprop_train.cu backprop.c backprop_cuda_kernel.cuh backprop.h bpnn.c bpnn.h cudaio.c timer.c timer.h
+SRCS = backprop_train.cu backprop.c backprop_cuda_kernel.cuh backprop.h bpnn.c bpnn.h cudaio.c
 backprop_nvmgpu_SOURCES = $(SRCS)
 backprop_hostreg_SOURCES = $(SRCS)
 backprop_uvm_SOURCES = $(SRCS)
 backprop_cudamemcpy_SOURCES = $(SRCS)
 generator_SOURCES = $(SRCS) generator.c
-backprop_nvmgpu_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/library/include -DNVMGPU
-backprop_nvmgpu_LDADD = -lcuda -lcudart $(top_srcdir)/library/src/libdragon.a $(GLIB_LIBS)
+AM_CPPFLAGS = -I../common
+backprop_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/library/include -I../common
+backprop_LDADD = -lcuda -lcudart ../common/libutil.a
+backprop_nvmgpu_CFLAGS = $(backprop_CFLAGS) -DNVMGPU
+backprop_nvmgpu_LDADD = $(backprop_LDADD) $(top_srcdir)/library/src/libdragon.a $(GLIB_LIBS)
 backprop_nvmgpu_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
-backprop_hostreg_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/library/include -DHOSTREG
-backprop_hostreg_LDADD = -lcuda -lcudart
+backprop_hostreg_CFLAGS = $(backprop_CFLAGS) -DHOSTREG
+backprop_hostreg_LDADD = $(backprop_LDADD)
 backprop_hostreg_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
-backprop_uvm_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/library/include -DUVM
-backprop_uvm_LDADD = -lcuda -lcudart
+backprop_uvm_CFLAGS = $(backprop_CFLAGS) -DUVM
+backprop_uvm_LDADD = $(backprop_LDADD)
 backprop_uvm_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
-backprop_cudamemcpy_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/library/include -DCUDAMEMCPY
-backprop_cudamemcpy_LDADD = -lcuda -lcudart
+backprop_cudamemcpy_CFLAGS = $(backprop_CFLAGS) -DCUDAMEMCPY
+backprop_cudamemcpy_LDADD = $(backprop_LDADD)
 backprop_cudamemcpy_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
-generator_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/library/include -DGENERATOR
-generator_LDADD = -lcuda -lcudart
+generator_CFLAGS = $(backprop_CFLAGS) -DGENERATOR
+generator_LDADD = $(backprop_LDADD)
 generator_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
 all: all-am
 
@@ -401,24 +399,19 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/backprop_cudamemcpy-backprop.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/backprop_cudamemcpy-bpnn.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/backprop_cudamemcpy-cudaio.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/backprop_cudamemcpy-timer.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/backprop_hostreg-backprop.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/backprop_hostreg-bpnn.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/backprop_hostreg-cudaio.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/backprop_hostreg-timer.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/backprop_nvmgpu-backprop.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/backprop_nvmgpu-bpnn.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/backprop_nvmgpu-cudaio.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/backprop_nvmgpu-timer.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/backprop_uvm-backprop.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/backprop_uvm-bpnn.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/backprop_uvm-cudaio.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/backprop_uvm-timer.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/generator-backprop.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/generator-bpnn.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/generator-cudaio.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/generator-generator.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/generator-timer.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -476,20 +469,6 @@ backprop_cudamemcpy-cudaio.obj: cudaio.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_cudamemcpy_CFLAGS) $(CFLAGS) -c -o backprop_cudamemcpy-cudaio.obj `if test -f 'cudaio.c'; then $(CYGPATH_W) 'cudaio.c'; else $(CYGPATH_W) '$(srcdir)/cudaio.c'; fi`
 
-backprop_cudamemcpy-timer.o: timer.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_cudamemcpy_CFLAGS) $(CFLAGS) -MT backprop_cudamemcpy-timer.o -MD -MP -MF $(DEPDIR)/backprop_cudamemcpy-timer.Tpo -c -o backprop_cudamemcpy-timer.o `test -f 'timer.c' || echo '$(srcdir)/'`timer.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/backprop_cudamemcpy-timer.Tpo $(DEPDIR)/backprop_cudamemcpy-timer.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='timer.c' object='backprop_cudamemcpy-timer.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_cudamemcpy_CFLAGS) $(CFLAGS) -c -o backprop_cudamemcpy-timer.o `test -f 'timer.c' || echo '$(srcdir)/'`timer.c
-
-backprop_cudamemcpy-timer.obj: timer.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_cudamemcpy_CFLAGS) $(CFLAGS) -MT backprop_cudamemcpy-timer.obj -MD -MP -MF $(DEPDIR)/backprop_cudamemcpy-timer.Tpo -c -o backprop_cudamemcpy-timer.obj `if test -f 'timer.c'; then $(CYGPATH_W) 'timer.c'; else $(CYGPATH_W) '$(srcdir)/timer.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/backprop_cudamemcpy-timer.Tpo $(DEPDIR)/backprop_cudamemcpy-timer.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='timer.c' object='backprop_cudamemcpy-timer.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_cudamemcpy_CFLAGS) $(CFLAGS) -c -o backprop_cudamemcpy-timer.obj `if test -f 'timer.c'; then $(CYGPATH_W) 'timer.c'; else $(CYGPATH_W) '$(srcdir)/timer.c'; fi`
-
 backprop_hostreg-backprop.o: backprop.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_hostreg_CFLAGS) $(CFLAGS) -MT backprop_hostreg-backprop.o -MD -MP -MF $(DEPDIR)/backprop_hostreg-backprop.Tpo -c -o backprop_hostreg-backprop.o `test -f 'backprop.c' || echo '$(srcdir)/'`backprop.c
 @am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/backprop_hostreg-backprop.Tpo $(DEPDIR)/backprop_hostreg-backprop.Po
@@ -531,20 +510,6 @@ backprop_hostreg-cudaio.obj: cudaio.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='cudaio.c' object='backprop_hostreg-cudaio.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_hostreg_CFLAGS) $(CFLAGS) -c -o backprop_hostreg-cudaio.obj `if test -f 'cudaio.c'; then $(CYGPATH_W) 'cudaio.c'; else $(CYGPATH_W) '$(srcdir)/cudaio.c'; fi`
-
-backprop_hostreg-timer.o: timer.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_hostreg_CFLAGS) $(CFLAGS) -MT backprop_hostreg-timer.o -MD -MP -MF $(DEPDIR)/backprop_hostreg-timer.Tpo -c -o backprop_hostreg-timer.o `test -f 'timer.c' || echo '$(srcdir)/'`timer.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/backprop_hostreg-timer.Tpo $(DEPDIR)/backprop_hostreg-timer.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='timer.c' object='backprop_hostreg-timer.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_hostreg_CFLAGS) $(CFLAGS) -c -o backprop_hostreg-timer.o `test -f 'timer.c' || echo '$(srcdir)/'`timer.c
-
-backprop_hostreg-timer.obj: timer.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_hostreg_CFLAGS) $(CFLAGS) -MT backprop_hostreg-timer.obj -MD -MP -MF $(DEPDIR)/backprop_hostreg-timer.Tpo -c -o backprop_hostreg-timer.obj `if test -f 'timer.c'; then $(CYGPATH_W) 'timer.c'; else $(CYGPATH_W) '$(srcdir)/timer.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/backprop_hostreg-timer.Tpo $(DEPDIR)/backprop_hostreg-timer.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='timer.c' object='backprop_hostreg-timer.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_hostreg_CFLAGS) $(CFLAGS) -c -o backprop_hostreg-timer.obj `if test -f 'timer.c'; then $(CYGPATH_W) 'timer.c'; else $(CYGPATH_W) '$(srcdir)/timer.c'; fi`
 
 backprop_nvmgpu-backprop.o: backprop.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_nvmgpu_CFLAGS) $(CFLAGS) -MT backprop_nvmgpu-backprop.o -MD -MP -MF $(DEPDIR)/backprop_nvmgpu-backprop.Tpo -c -o backprop_nvmgpu-backprop.o `test -f 'backprop.c' || echo '$(srcdir)/'`backprop.c
@@ -588,20 +553,6 @@ backprop_nvmgpu-cudaio.obj: cudaio.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_nvmgpu_CFLAGS) $(CFLAGS) -c -o backprop_nvmgpu-cudaio.obj `if test -f 'cudaio.c'; then $(CYGPATH_W) 'cudaio.c'; else $(CYGPATH_W) '$(srcdir)/cudaio.c'; fi`
 
-backprop_nvmgpu-timer.o: timer.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_nvmgpu_CFLAGS) $(CFLAGS) -MT backprop_nvmgpu-timer.o -MD -MP -MF $(DEPDIR)/backprop_nvmgpu-timer.Tpo -c -o backprop_nvmgpu-timer.o `test -f 'timer.c' || echo '$(srcdir)/'`timer.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/backprop_nvmgpu-timer.Tpo $(DEPDIR)/backprop_nvmgpu-timer.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='timer.c' object='backprop_nvmgpu-timer.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_nvmgpu_CFLAGS) $(CFLAGS) -c -o backprop_nvmgpu-timer.o `test -f 'timer.c' || echo '$(srcdir)/'`timer.c
-
-backprop_nvmgpu-timer.obj: timer.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_nvmgpu_CFLAGS) $(CFLAGS) -MT backprop_nvmgpu-timer.obj -MD -MP -MF $(DEPDIR)/backprop_nvmgpu-timer.Tpo -c -o backprop_nvmgpu-timer.obj `if test -f 'timer.c'; then $(CYGPATH_W) 'timer.c'; else $(CYGPATH_W) '$(srcdir)/timer.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/backprop_nvmgpu-timer.Tpo $(DEPDIR)/backprop_nvmgpu-timer.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='timer.c' object='backprop_nvmgpu-timer.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_nvmgpu_CFLAGS) $(CFLAGS) -c -o backprop_nvmgpu-timer.obj `if test -f 'timer.c'; then $(CYGPATH_W) 'timer.c'; else $(CYGPATH_W) '$(srcdir)/timer.c'; fi`
-
 backprop_uvm-backprop.o: backprop.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_uvm_CFLAGS) $(CFLAGS) -MT backprop_uvm-backprop.o -MD -MP -MF $(DEPDIR)/backprop_uvm-backprop.Tpo -c -o backprop_uvm-backprop.o `test -f 'backprop.c' || echo '$(srcdir)/'`backprop.c
 @am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/backprop_uvm-backprop.Tpo $(DEPDIR)/backprop_uvm-backprop.Po
@@ -644,20 +595,6 @@ backprop_uvm-cudaio.obj: cudaio.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_uvm_CFLAGS) $(CFLAGS) -c -o backprop_uvm-cudaio.obj `if test -f 'cudaio.c'; then $(CYGPATH_W) 'cudaio.c'; else $(CYGPATH_W) '$(srcdir)/cudaio.c'; fi`
 
-backprop_uvm-timer.o: timer.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_uvm_CFLAGS) $(CFLAGS) -MT backprop_uvm-timer.o -MD -MP -MF $(DEPDIR)/backprop_uvm-timer.Tpo -c -o backprop_uvm-timer.o `test -f 'timer.c' || echo '$(srcdir)/'`timer.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/backprop_uvm-timer.Tpo $(DEPDIR)/backprop_uvm-timer.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='timer.c' object='backprop_uvm-timer.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_uvm_CFLAGS) $(CFLAGS) -c -o backprop_uvm-timer.o `test -f 'timer.c' || echo '$(srcdir)/'`timer.c
-
-backprop_uvm-timer.obj: timer.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_uvm_CFLAGS) $(CFLAGS) -MT backprop_uvm-timer.obj -MD -MP -MF $(DEPDIR)/backprop_uvm-timer.Tpo -c -o backprop_uvm-timer.obj `if test -f 'timer.c'; then $(CYGPATH_W) 'timer.c'; else $(CYGPATH_W) '$(srcdir)/timer.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/backprop_uvm-timer.Tpo $(DEPDIR)/backprop_uvm-timer.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='timer.c' object='backprop_uvm-timer.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_uvm_CFLAGS) $(CFLAGS) -c -o backprop_uvm-timer.obj `if test -f 'timer.c'; then $(CYGPATH_W) 'timer.c'; else $(CYGPATH_W) '$(srcdir)/timer.c'; fi`
-
 generator-backprop.o: backprop.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(generator_CFLAGS) $(CFLAGS) -MT generator-backprop.o -MD -MP -MF $(DEPDIR)/generator-backprop.Tpo -c -o generator-backprop.o `test -f 'backprop.c' || echo '$(srcdir)/'`backprop.c
 @am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/generator-backprop.Tpo $(DEPDIR)/generator-backprop.Po
@@ -699,20 +636,6 @@ generator-cudaio.obj: cudaio.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='cudaio.c' object='generator-cudaio.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(generator_CFLAGS) $(CFLAGS) -c -o generator-cudaio.obj `if test -f 'cudaio.c'; then $(CYGPATH_W) 'cudaio.c'; else $(CYGPATH_W) '$(srcdir)/cudaio.c'; fi`
-
-generator-timer.o: timer.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(generator_CFLAGS) $(CFLAGS) -MT generator-timer.o -MD -MP -MF $(DEPDIR)/generator-timer.Tpo -c -o generator-timer.o `test -f 'timer.c' || echo '$(srcdir)/'`timer.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/generator-timer.Tpo $(DEPDIR)/generator-timer.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='timer.c' object='generator-timer.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(generator_CFLAGS) $(CFLAGS) -c -o generator-timer.o `test -f 'timer.c' || echo '$(srcdir)/'`timer.c
-
-generator-timer.obj: timer.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(generator_CFLAGS) $(CFLAGS) -MT generator-timer.obj -MD -MP -MF $(DEPDIR)/generator-timer.Tpo -c -o generator-timer.obj `if test -f 'timer.c'; then $(CYGPATH_W) 'timer.c'; else $(CYGPATH_W) '$(srcdir)/timer.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/generator-timer.Tpo $(DEPDIR)/generator-timer.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='timer.c' object='generator-timer.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(generator_CFLAGS) $(CFLAGS) -c -o generator-timer.obj `if test -f 'timer.c'; then $(CYGPATH_W) 'timer.c'; else $(CYGPATH_W) '$(srcdir)/timer.c'; fi`
 
 generator-generator.o: generator.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(generator_CFLAGS) $(CFLAGS) -MT generator-generator.o -MD -MP -MF $(DEPDIR)/generator-generator.Tpo -c -o generator-generator.o `test -f 'generator.c' || echo '$(srcdir)/'`generator.c

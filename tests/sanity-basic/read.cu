@@ -8,28 +8,8 @@
 
 #include <dragon.h>
 
-#define CUDA_CALL_SAFE(f) \
-    do \
-    {                                                        \
-        cudaError_t _cuda_error = f;                         \
-        if (_cuda_error != cudaSuccess)                      \
-        {                                                    \
-            fprintf(stderr,  \
-                "%s, %d, CUDA ERROR: %s %s\n",  \
-                __FILE__,   \
-                __LINE__,   \
-                cudaGetErrorName(_cuda_error),  \
-                cudaGetErrorString(_cuda_error) \
-            ); \
-            abort(); \
-            return EXIT_FAILURE; \
-        } \
-    } while (0)        
-
-double time_diff(struct timeval tv_start, struct timeval tv_stop)
-{
-    return (double)(tv_stop.tv_sec - tv_start.tv_sec) * 1000.0 + (double)(tv_stop.tv_usec - tv_start.tv_usec) / 1000.0;
-}
+#include "cuhelper.h"
+#include "timer.h"
 
 __device__ bool d_result = true;
 
@@ -50,12 +30,10 @@ int main(int argc, char *argv[])
     size_t total_size;
     cudaEvent_t start_event, stop_event;
     float kernel_time = 0;          // in ms
-    double free_time = 0;          // in ms
-    double map_time = 0;          // in ms
+    unsigned free_time = 0;          // in ms
+    unsigned map_time = 0;          // in ms
     bool h_result = true;
     int seed;
-
-    struct timeval tv_start, tv_stop;
 
     if (argc != 5)
     {
@@ -74,13 +52,11 @@ int main(int argc, char *argv[])
     CUDA_CALL_SAFE(cudaEventCreate(&start_event));
     CUDA_CALL_SAFE(cudaEventCreate(&stop_event));
 
-    gettimeofday(&tv_start, NULL);
+    init_tickcount();
     if (dragon_map(argv[1], total_size, D_F_READ, (void **)&g_buf) != D_OK)
         return EXIT_FAILURE;
     fprintf(stderr, "g_buf: %p\n", g_buf);
-    gettimeofday(&tv_stop, NULL);
-
-    map_time = time_diff(tv_start, tv_stop);
+    map_time = get_tickcount();
 
     CUDA_CALL_SAFE(cudaEventRecord(start_event));
     kernel<<< num_tblocks, num_threads >>>(g_buf, seed);
@@ -91,17 +67,15 @@ int main(int argc, char *argv[])
 
     CUDA_CALL_SAFE(cudaDeviceSynchronize());
 
-    gettimeofday(&tv_start, NULL);
+    init_tickcount();
     if (dragon_unmap(g_buf) != D_OK)
         return EXIT_FAILURE;
-    gettimeofday(&tv_stop, NULL);
-
-    free_time = time_diff(tv_start, tv_stop);
+    free_time = get_tickcount();
 
     CUDA_CALL_SAFE(cudaMemcpyFromSymbol(&h_result, d_result, sizeof(d_result), 0, cudaMemcpyDeviceToHost));
 
     printf("==> header: kernel_time (ms),free_time (ms),map_time (ms)\n");
-    printf("==> data: %f,%f,%f\n", kernel_time, free_time, map_time);
+    printf("==> data: %f,%f,%f\n", kernel_time, free_time / 1000.0, map_time / 1000.0);
     printf("==> Data validation: %s\n", h_result ? "Pass" : "Fail");
 
     if (h_result)
@@ -109,4 +83,3 @@ int main(int argc, char *argv[])
     else
         return EXIT_FAILURE;
 }
-

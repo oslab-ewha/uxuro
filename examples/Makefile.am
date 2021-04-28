@@ -1,1 +1,1 @@
-SUBDIRS = backprop
+SUBDIRS = common backprop

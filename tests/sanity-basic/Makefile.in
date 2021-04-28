@@ -104,12 +104,12 @@ readtest_OBJECTS = $(am_readtest_OBJECTS)
 readtest_LDADD = $(LDADD)
 am__DEPENDENCIES_1 =
 readtest_DEPENDENCIES = $(top_srcdir)/library/src/libdragon.a \
-	$(am__DEPENDENCIES_1)
+	$(am__DEPENDENCIES_1) ../../examples/common/libutil.a
 am_writetest_OBJECTS = write.$(OBJEXT)
 writetest_OBJECTS = $(am_writetest_OBJECTS)
 writetest_LDADD = $(LDADD)
 writetest_DEPENDENCIES = $(top_srcdir)/library/src/libdragon.a \
-	$(am__DEPENDENCIES_1)
+	$(am__DEPENDENCIES_1) ../../examples/common/libutil.a
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -262,8 +262,8 @@ readtest_SOURCES = read.cu
 writetest_SOURCES = write.cu
 readtest_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
 writetest_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
-AM_CPPFLAGS = -I$(top_srcdir)/library/include
-LDADD = $(top_srcdir)/library/src/libdragon.a $(GLIB_LIBS)
+AM_CPPFLAGS = -I$(top_srcdir)/library/include -I../../examples/common
+LDADD = $(top_srcdir)/library/src/libdragon.a $(GLIB_LIBS) ../../examples/common/libutil.a
 all: all-am
 
 .SUFFIXES:

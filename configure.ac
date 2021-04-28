@@ -39,6 +39,7 @@ AC_CHECK_FUNCS([gettimeofday sqrt strchr])
 AC_CONFIG_FILES([Makefile
                  library/src/Makefile
                  examples/Makefile
+                 examples/common/Makefile
 		 examples/backprop/Makefile
 		 tests/sanity-basic/Makefile
 		 ])
