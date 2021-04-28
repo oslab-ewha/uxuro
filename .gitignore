@@ -37,3 +37,6 @@ cscope.files
 /kernel_nvidia/modules.order
 /kernel_nvidia/nv_compiler.h
 /stamp-h1
+/tests/sanity-basic/Makefile
+/tests/sanity-basic/readtest
+/tests/sanity-basic/writetest

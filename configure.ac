@@ -40,6 +40,7 @@ AC_CONFIG_FILES([Makefile
                  library/src/Makefile
                  examples/Makefile
 		 examples/backprop/Makefile
+		 tests/sanity-basic/Makefile
 		 ])
 
 AC_OUTPUT

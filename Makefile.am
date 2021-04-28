@@ -1,1 +1,1 @@
-SUBDIRS = library/src examples
+SUBDIRS = library/src examples tests/sanity-basic
