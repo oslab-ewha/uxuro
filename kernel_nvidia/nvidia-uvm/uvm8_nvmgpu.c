@@ -570,6 +570,7 @@ static struct page *prepare_page_for_read2(struct file *filp, loff_t ppos, uvm_v
         pgoff_t end_index;
         loff_t isize;
         unsigned long nr;
+        NV_STATUS ret;
 
         cond_resched();
 find_page:
@@ -660,7 +661,6 @@ page_ok:
             mark_page_accessed(page);
         prev_index = index;
 
-#if 0////TODO
         /*
          * Ok, we have the page, and it's up-to-date, so
          * now we can insert it to the va_block...
@@ -670,7 +670,8 @@ page_ok:
             error = ret;
             goto out;
         }
-#endif
+	unlock_page(page);
+
         offset += PAGE_SIZE;
         index += offset >> PAGE_SHIFT;
         offset &= ~PAGE_MASK;
@@ -826,12 +827,12 @@ fill_pagecaches_for_read(struct file *nvmgpu_file, uvm_va_block_t *va_block, uvm
 static uvm_page_index_t
 get_region_readable_outer(uvm_va_block_t *va_block, struct file *nvmgpu_file)
 {
-    uvm_page_index_t outer =  (va_block->end - va_block->start + 1) >> PAGE_SHIFT;
+    uvm_page_index_t outer = ((va_block->end - va_block->start) >> PAGE_SHIFT) + 1;
     uvm_page_index_t outer_max;
     struct inode *inode = nvmgpu_file->f_mapping->host;
     loff_t len_remain = i_size_read(inode) - (va_block->start - va_block->va_range->node.start);
 
-    outer_max = len_remain >> PAGE_SHIFT;
+    outer_max = (len_remain >> PAGE_SHIFT) + 1;
     if (outer > outer_max)
         return outer_max;
     return outer;

@@ -895,9 +895,13 @@ static NV_STATUS block_populate_page_cpu(uvm_va_block_t *block, uvm_page_index_t
     if (uvm_nvmgpu_is_managed(block->va_range) && uvm_nvmgpu_block_file_dirty(block) &&
 	!(block->va_range->node.nvmgpu_rtn.flags & (UVM_NVMGPU_FLAG_VOLATILE | UVM_NVMGPU_FLAG_USEHOSTBUF))) {
         page = assign_pagecache(block, page_index);
+	if (page)
+		uvm_page_mask_set(&block->cpu.pagecached, page_index);
     }
     else {
         page = assign_page(block, zero);
+	if (page)
+		uvm_page_mask_clear(&block->cpu.pagecached, page_index);
     }
 
     if (page == NULL)
@@ -7825,7 +7829,12 @@ static void block_kill(uvm_va_block_t *block)
                     // be conservative.
                     // Tell the OS we wrote to the page because we sometimes clear the dirty bit after writing to it.
                     SetPageDirty(block->cpu.pages[page_index]);
-                    __free_page(block->cpu.pages[page_index]);
+		    if (uvm_page_mask_test(&block->cpu.pagecached, page_index)) {
+			    put_page(block->cpu.pages[page_index]);
+		    }
+		    else {
+			    __free_page(block->cpu.pages[page_index]);
+		    }
                 }
                 else {
                     UVM_ASSERT(!uvm_page_mask_test(&block->cpu.resident, page_index));
@@ -7837,6 +7846,7 @@ static void block_kill(uvm_va_block_t *block)
         // Clearing the resident bit isn't strictly necessary since this block
         // is getting destroyed, but it keeps state consistent for assertions.
         uvm_page_mask_zero(&block->cpu.resident);
+        uvm_page_mask_zero(&block->cpu.pagecached);
         block_clear_resident_processor(block, UVM_ID_CPU);
 
         uvm_kvfree(block->cpu.pages);
