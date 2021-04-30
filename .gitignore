@@ -27,6 +27,8 @@ cscope.files
 /examples/backprop/backprop.nvmgpu
 /examples/backprop/backprop.uvm
 /examples/backprop/generator
+/examples/common/Makefile
+/examples/common/libutil.a
 /library/src/Makefile
 /library/src/libdragon.a
 /kernel_nvidia/.cache.mk
