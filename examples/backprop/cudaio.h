@@ -15,8 +15,8 @@ typedef enum {
 void *cuio_alloc_data(size_t length);
 void cuio_free_data(void *data);
 
-float *cuio_load_floats(const char *fname, size_t count, cuio_mode_t mode);
-void cuio_unload_floats(const char *fname, size_t count, float *data, cuio_mode_t mode);
+float *cuio_load_floats(const char *fpath, size_t count, cuio_mode_t mode);
+void cuio_unload_floats(const char *fpath, size_t count, float *data, cuio_mode_t mode);
 	
 #ifdef __cplusplus
 }

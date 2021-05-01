@@ -46,8 +46,9 @@ void bpnn_prepare_delta(BPNN *net);
 void bpnn_finalize(BPNN *net);
 
 BPNN *bpnn_create(long n_in, long n_hidden, long n_out);
+void bpnn_load(BPNN *net, const char *folder);
+void bpnn_save(BPNN *net, const char *folder);
 void bpnn_free(BPNN *net);
-
 
 #ifdef __cplusplus
 }

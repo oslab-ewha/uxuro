@@ -15,23 +15,4 @@
 #include "bpnn.h"
 #include "cuhelper.h"
 
-/*** User-level functions ***/
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-extern long	layer_size;
-extern char	*folder;
-	
-#ifdef __cplusplus
-}
-#endif
-
-void bpnn_save();
-BPNN *bpnn_read();
-
-void read_file(const char *fname, size_t length, void *buf);
-void write_file(const char *fname, size_t length, void *buf);
-
 #endif

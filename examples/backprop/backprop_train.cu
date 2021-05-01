@@ -4,41 +4,39 @@
 #include <math.h>
 #include <cuda.h>
 
-// includes, kernels
 #include "backprop_cuda_kernel.cuh"
 #include "backprop.h"
 #include "timer.h"
 
-#if defined(CUDAMEMCPY)
-extern "C" double d2h_memcpy_time;       // in ms
-extern "C" double h2d_memcpy_time;       // in ms
-#endif
+typedef struct {
+	unsigned	kernel_ticks_gpu, kernel_ticks_cpu;
+	float		err_out, err_hid;
+} train_result_t;
 
-static unsigned
-backprop_train_cuda(BPNN *net, float *eo, float *eh)
+static void
+backprop_train_cuda(BPNN *net, train_result_t *pres)
 {
 	unsigned long	num_blocks;
+	int	shmsize;
 
 	num_blocks = net->input_n / 16;  
 
 	dim3  grid(num_blocks, 1);
 	dim3  threads(16, 16);
 
-	unsigned	kernel_ticks = 0;
-
 	bpnn_prepare(net, num_blocks);
 
 	printf("Performing GPU computation\n");
 
-	init_tickcount();
+	shmsize = (16 + 16 * 16) * sizeof(float);
 
-	int	shmsize = (16 + 16 * 16) * sizeof(float);
+	init_tickcount();
 	bpnn_layerforward_CUDA<<<grid, threads, shmsize>>>(net->kernel_input_units, net->kernel_input_weights, net->kernel_partial_sum,
 							   net->input_n, net->hidden_n);
  
 	CUDA_CALL_SAFE(cudaDeviceSynchronize());
 
-	kernel_ticks = get_tickcount();
+	pres->kernel_ticks_gpu = get_tickcount();
 
 	cudaError_t error = cudaGetLastError();
 	if (error != cudaSuccess) {
@@ -46,51 +44,57 @@ backprop_train_cuda(BPNN *net, float *eo, float *eh)
 		exit(EXIT_FAILURE);
 	}
 
+	init_tickcount();
+
 	bpnn_update_hidden(net, num_blocks);
 	bpnn_layerforward(net);
-	bpnn_output_error(net);
-	bpnn_hidden_error(net);
+	pres->err_out = bpnn_output_error(net);
+	pres->err_hid = bpnn_hidden_error(net);
 	bpnn_adjust_weights(net);
 
 	bpnn_prepare_delta(net);
+
+	pres->kernel_ticks_cpu = get_tickcount();
 
 	init_tickcount();
 	bpnn_adjust_weights_cuda<<<grid, threads>>>(net->kernel_hidden_delta, net->hidden_n, net->kernel_input_units,
 						    net->input_n, net->kernel_input_weights, net->kernel_prev_weights);
 
 	CUDA_CALL_SAFE(cudaDeviceSynchronize());
-	kernel_ticks += get_tickcount();
+	pres->kernel_ticks_gpu += get_tickcount();
 
 	bpnn_finalize(net);
-
-	return kernel_ticks;
 }
 
 extern "C" void
-backprop_train(void)
+backprop_train(const char *folder)
 {
 	BPNN	*net;
-	float	out_err, hid_err;
-	unsigned	kernel_ticks, pre_ticks, post_ticks;
+	unsigned	pre_ticks, post_ticks;
+	train_result_t	res;
 
 	init_tickcount();
 
-	net = bpnn_create(layer_size, 16, 1);
+	net = bpnn_create(0, 0, 0);
+	bpnn_load(net, folder);
 
 	pre_ticks = get_tickcount();
 
-	printf("Input layer size : %ld\n", layer_size);
+	printf("Network: %ldx%ldx%ld\n", net->input_n, net->hidden_n, net->output_n);
 	printf("Starting training kernel\n");
 
-	kernel_ticks = backprop_train_cuda(net, &out_err, &hid_err);
+	backprop_train_cuda(net, &res);
 
 	init_tickcount();
+	bpnn_save(net, folder);
 	bpnn_free(net);
 	post_ticks = get_tickcount();
 
 	printf("Training done\n");
+	printf("Output Error: %f\n", res.err_out);
+	printf("Hidden Error: %f\n", res.err_hid);
 
-	printf("kernel time(us): %u\n", kernel_ticks);
 	printf("pre time(us): %u\n", pre_ticks);
+	printf("kernel time(us): %u(gpu:%u)\n", res.kernel_ticks_gpu + res.kernel_ticks_cpu, res.kernel_ticks_gpu);
 	printf("post time(us): %u\n", post_ticks);
 }

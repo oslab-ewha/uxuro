@@ -1,15 +1,15 @@
 CLEANFILES = *~
 DISTCLEANFILES = *~
 
-SRCS = backprop_train.cu backprop.c backprop_cuda_kernel.cuh backprop.h bpnn.c bpnn.h cudaio.c
-
+SRCS_COMMON = backprop_train.cu backprop_cuda_kernel.cuh backprop.h bpnn.c bpnn.h cudaio.c
+SRCS = backprop.c $(SRCS_COMMON)
 noinst_PROGRAMS = backprop.nvmgpu backprop.hostreg backprop.uvm backprop.cudamemcpy generator
 
 backprop_nvmgpu_SOURCES = $(SRCS)
 backprop_hostreg_SOURCES = $(SRCS)
 backprop_uvm_SOURCES = $(SRCS)
 backprop_cudamemcpy_SOURCES = $(SRCS)
-generator_SOURCES = $(SRCS) generator.c
+generator_SOURCES = $(SRCS_COMMON) generator.c
 
 AM_CPPFLAGS = -I../common
 backprop_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/library/include -I../common

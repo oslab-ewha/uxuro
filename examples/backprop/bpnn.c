@@ -8,16 +8,8 @@
 
 #define ABS(x)          (((x) > 0.0) ? (x) : (-(x)))
 
-extern long	layer_size;
-
 extern void store_data(const char *fname, size_t count, float *data);
 extern void free_data(float *data);
-
-static float
-drnd(void)
-{
-	return ((float)rand() / (float)BIGRND);
-}
 
 static float
 squash(float x)
@@ -33,35 +25,6 @@ zero_prev_weights(BPNN *net)
 {
 	memset(net->input_prev_weights, 0, sizeof(float) * (net->input_n + 1) * (net->hidden_n + 1));
 	memset(net->hidden_prev_weights, 0, sizeof(float) * (net->hidden_n + 1) * (net->output_n + 1));
-}
-
-static void
-randomize_floats(float *data, int count)
-{
-	int	i;
-
-	for (i = 0; i < count; i++) {
-		data[i] = (float)rand() / RAND_MAX;
-	}
-}
-
-static void
-randomize_output(BPNN *net)
-{
-	long	i;
-	for (i = 0; i <= net->output_n; i++) {
-		//w[i] = (float)rand() / RAND_MAX;
-		net->target[i] = 0.1;
-	}
-}
-
-static void
-randomize_bpnn(BPNN *net)
-{
-	randomize_floats(net->input_units, net->input_n + 1);
-	randomize_floats(net->input_weights, (net->input_n + 1) * (net->hidden_n + 1));
-	randomize_floats(net->hidden_weights, (net->hidden_n + 1) * (net->output_n + 1));
-	randomize_output(net);
 }
 
 void
@@ -215,11 +178,11 @@ bpnn_finalize(BPNN *net)
 	free(net->partial_sum);
 #endif
 
-	CUDA_CALL_SAFE(cudaFree(net->partial_sum));
+	CUDA_CALL_SAFE(cudaFree(net->kernel_partial_sum));
 }
 
 static void *
-load_floats(const char *fname, size_t count, cuio_mode_t mode)
+load_floats(const char *folder, const char *fname, size_t count, cuio_mode_t mode)
 {
 	char	fpath[256];
 
@@ -228,7 +191,7 @@ load_floats(const char *fname, size_t count, cuio_mode_t mode)
 }
 
 static void
-unload_floats(const char *fname, size_t count, float *data, cuio_mode_t mode)
+unload_floats(const char *folder, const char *fname, size_t count, float *data, cuio_mode_t mode)
 {
 	char	fpath[256];
 
@@ -239,61 +202,82 @@ unload_floats(const char *fname, size_t count, float *data, cuio_mode_t mode)
 BPNN *
 bpnn_create(long n_in, long n_hidden, long n_out)
 {
-	BPNN	*newnet;
+	BPNN	*net;
 
-	newnet = (BPNN *)malloc(sizeof(BPNN));
-	if (newnet == NULL) {
+	net = (BPNN *)calloc(1, sizeof(BPNN));
+	if (net == NULL) {
 		fprintf(stderr, "bpnn_create: Couldn't allocate neural network\n");
 		return NULL;
 	}
 
-	newnet->input_n = n_in;
-	newnet->hidden_n = n_hidden;
-	newnet->output_n = n_out;
+	net->input_n = n_in;
+	net->hidden_n = n_hidden;
+	net->output_n = n_out;
 
-#ifdef GENERATOR
-	newnet->input_units = load_floats(NULL, n_in + 1, CUIO_MODE_NONE);
-	newnet->target = load_floats(NULL, n_out + 1, CUIO_MODE_NONE);
-	newnet->input_weights = load_floats(NULL, (n_in + 1) * (n_hidden + 1), CUIO_MODE_NONE);
-	newnet->hidden_weights = load_floats(NULL, (n_hidden + 1) * (n_out + 1), CUIO_MODE_NONE);	
-	randomize_bpnn(newnet);
-#else
-	newnet->input_units = load_floats("input_units.mem", n_in + 1, CUIO_MODE_READONLY);
-	newnet->target = load_floats("target.mem", n_out + 1, CUIO_MODE_READONLY);
-	newnet->input_weights = load_floats("input_weights.mem", (n_in + 1) * (n_hidden + 1), CUIO_MODE_READWRITE);
-	newnet->hidden_weights = load_floats("hidden_weights.mem", (n_hidden + 1) * (n_out + 1), CUIO_MODE_READWRITE);
-#endif
-	newnet->input_prev_weights = load_floats("input_weights.prev.mem", (n_in + 1) * (n_hidden + 1), CUIO_MODE_WRITEONLY);
-	newnet->hidden_prev_weights = load_floats("hidden_weights.prev.mem", (n_hidden + 1) * (n_out + 1), CUIO_MODE_WRITEONLY);
-	newnet->hidden_units = load_floats(NULL, n_hidden + 1, CUIO_MODE_NONE);
-	newnet->output_units = load_floats(NULL, n_out + 1, CUIO_MODE_NONE);
-	newnet->hidden_delta = load_floats(NULL, n_hidden + 1, CUIO_MODE_NONE);
-	newnet->output_delta = load_floats(NULL, n_out + 1, CUIO_MODE_NONE);
+	return net;
+}
+
+static void
+load_net_conf(BPNN *net, const char *folder)
+{
+	FILE	*fp;
+	char	fpath[256];
+	char	buf[1024];
+
+	snprintf(fpath, 256, "%s/net.conf", folder);
+	fp = fopen(fpath, "r");
+	if (fp == NULL) {
+		fprintf(stderr, "cannot open: %s\n", fpath);
+		exit(2);
+	}
+	if (fgets(buf, 1024, fp) == NULL) {
+		fprintf(stderr, "cannot get a network configurations: %s\n", fpath);
+		exit(2);
+	}
+	if (sscanf(buf, "%ld %ld %ld", &net->input_n, &net->hidden_n, &net->output_n) != 3) {
+		fprintf(stderr, "invalid format: %s\n", fpath);
+		exit(3);
+	}
+	fclose(fp);
+}
+
+void
+bpnn_load(BPNN *net, const char *folder)
+{
+	load_net_conf(net, folder);
+
+	net->input_units = load_floats(folder, "input_units.mem", net->input_n + 1, CUIO_MODE_READONLY);
+	net->target = load_floats(folder, "target.mem", net->output_n + 1, CUIO_MODE_READONLY);
+	net->input_weights = load_floats(folder, "input_weights.mem", (net->input_n + 1) * (net->hidden_n + 1), CUIO_MODE_READWRITE);
+	net->hidden_weights = load_floats(folder, "hidden_weights.mem", (net->hidden_n + 1) * (net->output_n + 1), CUIO_MODE_READWRITE);
+	net->input_prev_weights = load_floats(folder, "input_weights.prev.mem", (net->input_n + 1) * (net->hidden_n + 1), CUIO_MODE_WRITEONLY);
+	net->hidden_prev_weights = load_floats(folder, "hidden_weights.prev.mem", (net->hidden_n + 1) * (net->output_n + 1), CUIO_MODE_WRITEONLY);
+	net->hidden_units = load_floats(folder, NULL, net->hidden_n + 1, CUIO_MODE_NONE);
+	net->output_units = load_floats(folder, NULL, net->output_n + 1, CUIO_MODE_NONE);
+	net->hidden_delta = load_floats(folder, NULL, net->hidden_n + 1, CUIO_MODE_NONE);
+	net->output_delta = load_floats(folder, NULL, net->output_n + 1, CUIO_MODE_NONE);
 
 #ifdef CUDAMEMCPY
-	zero_prev_weights(newnet);
-#endif	
-	return newnet;
+	zero_prev_weights(net);
+#endif
+}
+
+void
+bpnn_save(BPNN *net, const char *folder)
+{
+	unload_floats(folder, "input_units.mem", net->input_n + 1, net->input_units, CUIO_MODE_READONLY);
+	unload_floats(folder, NULL, net->hidden_n + 1, net->hidden_units, CUIO_MODE_NONE);
+	unload_floats(folder, "target.mem", net->output_n + 1, net->target, CUIO_MODE_READONLY);
+	unload_floats(folder, "input_weights.mem", (net->input_n + 1) * (net->hidden_n + 1), net->input_weights, CUIO_MODE_READWRITE);
+	unload_floats(folder, "hidden_weights.mem", (net->hidden_n + 1) * (net->output_n + 1), net->hidden_weights, CUIO_MODE_READWRITE);
+	unload_floats(folder, "input_weights.prev.mem", (net->input_n + 1) * (net->hidden_n + 1), net->input_prev_weights, CUIO_MODE_WRITEONLY);
+	unload_floats(folder, "hidden_weights.prev.mem", (net->hidden_n + 1) * (net->output_n + 1), net->hidden_prev_weights, CUIO_MODE_WRITEONLY);
+	unload_floats(folder, NULL, net->hidden_n + 1, net->hidden_delta, CUIO_MODE_NONE);
+	unload_floats(folder, NULL, net->output_n + 1, net->output_delta, CUIO_MODE_NONE);
 }
 
 void
 bpnn_free(BPNN *net)
 {
-#ifdef GENERATOR
-	unload_floats("input_units.mem", net->input_n + 1, net->input_units, CUIO_MODE_WRITEONLY);
-	unload_floats("target.mem", net->output_n + 1, net->target, CUIO_MODE_WRITEONLY);
-	unload_floats("input_weights.mem", (net->input_n + 1) * (net->hidden_n + 1), net->input_weights, CUIO_MODE_WRITEONLY);
-	unload_floats("hidden_weights.mem", (net->hidden_n + 1) * (net->output_n + 1), net->hidden_weights, CUIO_MODE_WRITEONLY);
-#else
-	unload_floats("input_units.mem", net->input_n + 1, net->input_units, CUIO_MODE_READONLY);
-	unload_floats(NULL, net->hidden_n + 1, net->hidden_units, CUIO_MODE_NONE);
-	unload_floats("target.mem", net->output_n + 1, net->target, CUIO_MODE_READONLY);
-	unload_floats("input_weights.mem", (net->input_n + 1) * (net->hidden_n + 1), net->input_weights, CUIO_MODE_READWRITE);
-	unload_floats("hidden_weights.mem", (net->hidden_n + 1) * (net->output_n + 1), net->hidden_weights, CUIO_MODE_READWRITE);
-	unload_floats("input_weights.prev.mem", (net->input_n + 1) * (net->hidden_n + 1), net->input_prev_weights, CUIO_MODE_WRITEONLY);
-	unload_floats("hidden_weights.prev.mem", (net->hidden_n + 1) * (net->output_n + 1), net->hidden_prev_weights, CUIO_MODE_WRITEONLY);
-	unload_floats(NULL, net->hidden_n + 1, net->hidden_delta, CUIO_MODE_NONE);
-	unload_floats(NULL, net->output_n + 1, net->output_delta, CUIO_MODE_NONE);
-#endif
 	free((char *)net);
 }

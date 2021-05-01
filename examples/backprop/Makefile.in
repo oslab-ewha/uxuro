@@ -102,38 +102,39 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 PROGRAMS = $(noinst_PROGRAMS)
 am__objects_1 = backprop_train.$(OBJEXT) \
-	backprop_cudamemcpy-backprop.$(OBJEXT) \
 	backprop_cudamemcpy-bpnn.$(OBJEXT) \
 	backprop_cudamemcpy-cudaio.$(OBJEXT)
-am_backprop_cudamemcpy_OBJECTS = $(am__objects_1)
+am__objects_2 = backprop_cudamemcpy-backprop.$(OBJEXT) \
+	$(am__objects_1)
+am_backprop_cudamemcpy_OBJECTS = $(am__objects_2)
 backprop_cudamemcpy_OBJECTS = $(am_backprop_cudamemcpy_OBJECTS)
 am__DEPENDENCIES_1 = ../common/libutil.a
 backprop_cudamemcpy_DEPENDENCIES = $(am__DEPENDENCIES_1)
-am__objects_2 = backprop_train.$(OBJEXT) \
-	backprop_hostreg-backprop.$(OBJEXT) \
+am__objects_3 = backprop_train.$(OBJEXT) \
 	backprop_hostreg-bpnn.$(OBJEXT) \
 	backprop_hostreg-cudaio.$(OBJEXT)
-am_backprop_hostreg_OBJECTS = $(am__objects_2)
+am__objects_4 = backprop_hostreg-backprop.$(OBJEXT) $(am__objects_3)
+am_backprop_hostreg_OBJECTS = $(am__objects_4)
 backprop_hostreg_OBJECTS = $(am_backprop_hostreg_OBJECTS)
 backprop_hostreg_DEPENDENCIES = $(am__DEPENDENCIES_1)
-am__objects_3 = backprop_train.$(OBJEXT) \
-	backprop_nvmgpu-backprop.$(OBJEXT) \
+am__objects_5 = backprop_train.$(OBJEXT) \
 	backprop_nvmgpu-bpnn.$(OBJEXT) \
 	backprop_nvmgpu-cudaio.$(OBJEXT)
-am_backprop_nvmgpu_OBJECTS = $(am__objects_3)
+am__objects_6 = backprop_nvmgpu-backprop.$(OBJEXT) $(am__objects_5)
+am_backprop_nvmgpu_OBJECTS = $(am__objects_6)
 backprop_nvmgpu_OBJECTS = $(am_backprop_nvmgpu_OBJECTS)
 am__DEPENDENCIES_2 =
 backprop_nvmgpu_DEPENDENCIES = $(am__DEPENDENCIES_1) \
 	$(top_srcdir)/library/src/libdragon.a $(am__DEPENDENCIES_2)
-am__objects_4 = backprop_train.$(OBJEXT) \
-	backprop_uvm-backprop.$(OBJEXT) backprop_uvm-bpnn.$(OBJEXT) \
+am__objects_7 = backprop_train.$(OBJEXT) backprop_uvm-bpnn.$(OBJEXT) \
 	backprop_uvm-cudaio.$(OBJEXT)
-am_backprop_uvm_OBJECTS = $(am__objects_4)
+am__objects_8 = backprop_uvm-backprop.$(OBJEXT) $(am__objects_7)
+am_backprop_uvm_OBJECTS = $(am__objects_8)
 backprop_uvm_OBJECTS = $(am_backprop_uvm_OBJECTS)
 backprop_uvm_DEPENDENCIES = $(am__DEPENDENCIES_1)
-am__objects_5 = backprop_train.$(OBJEXT) generator-backprop.$(OBJEXT) \
-	generator-bpnn.$(OBJEXT) generator-cudaio.$(OBJEXT)
-am_generator_OBJECTS = $(am__objects_5) generator-generator.$(OBJEXT)
+am__objects_9 = backprop_train.$(OBJEXT) generator-bpnn.$(OBJEXT) \
+	generator-cudaio.$(OBJEXT)
+am_generator_OBJECTS = $(am__objects_9) generator-generator.$(OBJEXT)
 generator_OBJECTS = $(am_generator_OBJECTS)
 generator_DEPENDENCIES = $(am__DEPENDENCIES_1)
 AM_V_P = $(am__v_P_@AM_V@)
@@ -308,12 +309,13 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 CLEANFILES = *~
 DISTCLEANFILES = *~
-SRCS = backprop_train.cu backprop.c backprop_cuda_kernel.cuh backprop.h bpnn.c bpnn.h cudaio.c
+SRCS_COMMON = backprop_train.cu backprop_cuda_kernel.cuh backprop.h bpnn.c bpnn.h cudaio.c
+SRCS = backprop.c $(SRCS_COMMON)
 backprop_nvmgpu_SOURCES = $(SRCS)
 backprop_hostreg_SOURCES = $(SRCS)
 backprop_uvm_SOURCES = $(SRCS)
 backprop_cudamemcpy_SOURCES = $(SRCS)
-generator_SOURCES = $(SRCS) generator.c
+generator_SOURCES = $(SRCS_COMMON) generator.c
 AM_CPPFLAGS = -I../common
 backprop_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/library/include -I../common
 backprop_LDADD = -lcuda -lcudart ../common/libutil.a
@@ -408,7 +410,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/backprop_uvm-backprop.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/backprop_uvm-bpnn.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/backprop_uvm-cudaio.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/generator-backprop.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/generator-bpnn.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/generator-cudaio.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/generator-generator.Po@am__quote@
@@ -594,20 +595,6 @@ backprop_uvm-cudaio.obj: cudaio.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='cudaio.c' object='backprop_uvm-cudaio.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(backprop_uvm_CFLAGS) $(CFLAGS) -c -o backprop_uvm-cudaio.obj `if test -f 'cudaio.c'; then $(CYGPATH_W) 'cudaio.c'; else $(CYGPATH_W) '$(srcdir)/cudaio.c'; fi`
-
-generator-backprop.o: backprop.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(generator_CFLAGS) $(CFLAGS) -MT generator-backprop.o -MD -MP -MF $(DEPDIR)/generator-backprop.Tpo -c -o generator-backprop.o `test -f 'backprop.c' || echo '$(srcdir)/'`backprop.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/generator-backprop.Tpo $(DEPDIR)/generator-backprop.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='backprop.c' object='generator-backprop.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(generator_CFLAGS) $(CFLAGS) -c -o generator-backprop.o `test -f 'backprop.c' || echo '$(srcdir)/'`backprop.c
-
-generator-backprop.obj: backprop.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(generator_CFLAGS) $(CFLAGS) -MT generator-backprop.obj -MD -MP -MF $(DEPDIR)/generator-backprop.Tpo -c -o generator-backprop.obj `if test -f 'backprop.c'; then $(CYGPATH_W) 'backprop.c'; else $(CYGPATH_W) '$(srcdir)/backprop.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/generator-backprop.Tpo $(DEPDIR)/generator-backprop.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='backprop.c' object='generator-backprop.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(generator_CFLAGS) $(CFLAGS) -c -o generator-backprop.obj `if test -f 'backprop.c'; then $(CYGPATH_W) 'backprop.c'; else $(CYGPATH_W) '$(srcdir)/backprop.c'; fi`
 
 generator-bpnn.o: bpnn.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(generator_CFLAGS) $(CFLAGS) -MT generator-bpnn.o -MD -MP -MF $(DEPDIR)/generator-bpnn.Tpo -c -o generator-bpnn.o `test -f 'bpnn.c' || echo '$(srcdir)/'`bpnn.c
