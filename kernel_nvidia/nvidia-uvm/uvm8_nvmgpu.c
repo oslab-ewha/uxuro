@@ -832,7 +832,7 @@ get_region_readable_outer(uvm_va_block_t *va_block, struct file *nvmgpu_file)
     struct inode *inode = nvmgpu_file->f_mapping->host;
     loff_t len_remain = i_size_read(inode) - (va_block->start - va_block->va_range->node.start);
 
-    outer_max = (len_remain >> PAGE_SHIFT) + 1;
+    outer_max = (len_remain + PAGE_SIZE - 1) >> PAGE_SHIFT;
     if (outer > outer_max)
         return outer_max;
     return outer;
@@ -925,7 +925,10 @@ NV_STATUS uvm_nvmgpu_read_end(uvm_va_block_t *va_block)
     struct page *page;
 
     uvm_page_mask_t read_mask;
-    uvm_va_block_region_t region = uvm_va_block_region(0, (va_block->end - va_block->start + 1) / PAGE_SIZE);
+
+    uvm_nvmgpu_range_tree_node_t *nvmgpu_rtn = &va_block->va_range->node.nvmgpu_rtn;
+    struct file *nvmgpu_file = nvmgpu_rtn->filp;
+    uvm_va_block_region_t region = uvm_va_block_region(0, get_region_readable_outer(va_block, nvmgpu_file));
 
     uvm_page_mask_fill(&read_mask);
     for_each_va_block_page_in_region_mask(page_id, &read_mask, region) {

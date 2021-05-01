@@ -872,6 +872,24 @@ assign_page(uvm_va_block_t *block, bool zero)
     return page;
 }
 
+static inline bool nvmgpu_is_pagecachable(uvm_va_block_t *block, uvm_page_index_t page_id)
+{
+    struct inode *inode;
+    uvm_page_index_t	outer_max;
+    loff_t len_remain;
+
+    if (!uvm_nvmgpu_is_managed(block->va_range))
+        return false;
+    if (block->va_range->node.nvmgpu_rtn.flags & (UVM_NVMGPU_FLAG_VOLATILE | UVM_NVMGPU_FLAG_USEHOSTBUF))
+        return false;
+    inode = block->va_range->node.nvmgpu_rtn.filp->f_mapping->host;
+    len_remain = i_size_read(inode) - (block->start - block->va_range->node.start);
+    outer_max = (len_remain + PAGE_SIZE - 1) >> PAGE_SHIFT;
+    if (page_id >= outer_max)
+        return false;
+    return true;
+}
+
 // Allocates the input page in the block, if it doesn't already exist
 //
 // Also maps the page for physical access by all GPUs used by the block, which
@@ -892,8 +910,7 @@ static NV_STATUS block_populate_page_cpu(uvm_va_block_t *block, uvm_page_index_t
     if (block_test && block_test->inject_cpu_pages_allocation_error)
         return NV_ERR_NO_MEMORY;
 
-    if (uvm_nvmgpu_is_managed(block->va_range) && uvm_nvmgpu_block_file_dirty(block) &&
-	!(block->va_range->node.nvmgpu_rtn.flags & (UVM_NVMGPU_FLAG_VOLATILE | UVM_NVMGPU_FLAG_USEHOSTBUF))) {
+    if (nvmgpu_is_pagecachable(block, page_index)) {
         page = assign_pagecache(block, page_index);
 	if (page)
 		uvm_page_mask_set(&block->cpu.pagecached, page_index);
