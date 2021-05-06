@@ -114,6 +114,12 @@ cuio_memcpy_d2h(cuio_ptr_t *pptr)
 	CUDA_CALL_SAFE(cudaDeviceSynchronize());
 }
 
+void
+cuio_memset_d(cuio_ptr_t *pptr, int val)
+{
+	CUDA_CALL_SAFE(cudaMemset(pptr->ptr_d, 0, pptr->size));
+}
+
 static void
 read_file(const char *fpath, size_t len, cuio_ptr_t ptr)
 {
@@ -131,12 +137,13 @@ read_file(const char *fpath, size_t len, cuio_ptr_t ptr)
 }
 
 static cuio_ptr_t
-load_by_read(const char *fpath, size_t len)
+load_by_read(const char *fpath, size_t len, cuio_mode_t mode)
 {
 	cuio_ptr_t	ptr;
 
 	ptr = cuio_alloc_mem(len);
-	read_file(fpath, len, ptr);
+	if (mode != CUIO_MODE_WRITEONLY)
+		read_file(fpath, len, ptr);
 	return ptr;
 }
 
@@ -197,7 +204,7 @@ munmap_by_dragon(const char *fpath, cuio_ptr_t *pptr)
 }
 
 static cuio_ptr_t
-mmap_by_hostreg(const char *fpath, size_t len)
+mmap_by_hostreg(const char *fpath, size_t len, cuio_mode_t mode)
 {
 	cuio_ptr_t	ptr;
 	int	fd;
@@ -281,9 +288,9 @@ cuio_load_floats(const char *fname, size_t count, cuio_mode_t mode)
 	case CUIO_TYPE_DRAGON:
 		return mmap_by_dragon(fpath, len, mode);
 	case CUIO_TYPE_HOSTREG:
-		return mmap_by_hostreg(fpath, len);
+		return mmap_by_hostreg(fpath, len, mode);
 	default:
-		return load_by_read(fpath, len);
+		return load_by_read(fpath, len, mode);
 	}
 }
 

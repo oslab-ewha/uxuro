@@ -21,6 +21,9 @@ cscope.files
 /config.log
 /config.status
 /examples/Makefile
+/examples/BlackScholes/BlackScholes
+/examples/BlackScholes/BlackScholes.gen
+/examples/BlackScholes/Makefile
 /examples/backprop/Makefile
 /examples/backprop/backprop
 /examples/backprop/backprop.gen

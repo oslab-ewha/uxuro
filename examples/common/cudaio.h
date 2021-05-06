@@ -39,6 +39,7 @@ cuio_ptr_t cuio_alloc_mem(size_t len);
 void cuio_free_mem(cuio_ptr_t *pptr);
 void cuio_memcpy_h2d(cuio_ptr_t *pptr);
 void cuio_memcpy_d2h(cuio_ptr_t *pptr);
+void cuio_memset_d(cuio_ptr_t *pptr, int val);
 
 void cuio_load_conf(cuio_confer_t func, void *ctx);
 void cuio_save_conf(cuio_confer_t func, void *ctx);

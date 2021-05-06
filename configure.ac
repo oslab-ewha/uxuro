@@ -41,6 +41,7 @@ AC_CONFIG_FILES([Makefile
                  examples/Makefile
                  examples/common/Makefile
 		 examples/backprop/Makefile
+		 examples/BlackScholes/Makefile
 		 tests/sanity-basic/Makefile
 		 ])
 
