@@ -235,6 +235,38 @@ munmap_by_hostreg(const char *fpath, cuio_ptr_t *pptr)
 	}
 }
 
+void
+cuio_load_conf(cuio_confer_t confer, void *ctx)
+{
+	FILE	*fp;
+	char	fpath[256];
+
+	snprintf(fpath, 256, "%s/cuio.conf", folder_base);
+	fp = fopen(fpath, "r");
+	if (fp == NULL) {
+		fprintf(stderr, "cannot open: %s\n", fpath);
+		exit(2);
+	}
+	confer(fp, fpath, ctx);
+	fclose(fp);
+}
+
+void
+cuio_save_conf(cuio_confer_t confer, void *ctx)
+{
+	FILE	*fp;
+	char	fpath[256];
+
+	snprintf(fpath, 256, "%s/cuio.conf", folder_base);
+	fp = fopen(fpath, "w");
+	if (fp == NULL) {
+		fprintf(stderr, "cannot open for write: %s\n", fpath);
+		exit(2);
+	}
+	confer(fp, fpath, ctx);
+	fclose(fp);	
+}
+
 cuio_ptr_t
 cuio_load_floats(const char *fname, size_t count, cuio_mode_t mode)
 {

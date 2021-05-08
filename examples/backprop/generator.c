@@ -47,24 +47,15 @@ zero_prev_weights(BPNN *net)
 }
 
 static void
-save_net_conf(BPNN *net, const char *folder)
+confer_save(FILE *fp, const char *fpath, void *ctx)
 {
-	FILE	*fp;
-	char	fpath[256];
-	char	buf[1024];
+	BPNN	*net = (BPNN *)ctx;
 
-	snprintf(fpath, 256, "%s/net.conf", folder);
-	fp = fopen(fpath, "w");
-	if (fp == NULL) {
-		fprintf(stderr, "cannot open for write: %s\n", fpath);
-		exit(2);
-	}
 	fprintf(fp, "%ld %ld %ld", net->input_n, net->hidden_n, net->output_n);
-	fclose(fp);
 }
 
 static void
-generate_bpnn(const char *folder, int n_inp)
+generate_bpnn(int n_inp)
 {
 	BPNN	*net;
 	int	n_hid = 16, n_out = 1;
@@ -90,7 +81,7 @@ generate_bpnn(const char *folder, int n_inp)
 	cuio_unload_floats("input_weights.prev.mem", &net->input_prev_weights);
 	cuio_unload_floats("hidden_weights.prev.mem", &net->hidden_prev_weights);
 
-	save_net_conf(net, folder);
+	cuio_save_conf(confer_save, net);
 	bpnn_free(net);
 }
 
@@ -114,7 +105,7 @@ main(int argc, char *argv[])
 	printf("input size: %ld\n", n_inp);
 
 	cuio_init(CUIO_TYPE_HOST, folder, 1);
-	generate_bpnn(folder, n_inp);
+	generate_bpnn(n_inp);
 
 	return 0;
 }

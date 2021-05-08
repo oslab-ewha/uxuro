@@ -155,30 +155,6 @@ bpnn_create(long n_in, long n_hidden, long n_out)
 }
 
 static void
-load_conf(BPNN *net, const char *folder)
-{
-	FILE	*fp;
-	char	fpath[256];
-	char	buf[1024];
-
-	snprintf(fpath, 256, "%s/net.conf", folder);
-	fp = fopen(fpath, "r");
-	if (fp == NULL) {
-		fprintf(stderr, "cannot open: %s\n", fpath);
-		exit(2);
-	}
-	if (fgets(buf, 1024, fp) == NULL) {
-		fprintf(stderr, "cannot get a network configurations: %s\n", fpath);
-		exit(2);
-	}
-	if (sscanf(buf, "%ld %ld %ld", &net->input_n, &net->hidden_n, &net->output_n) != 3) {
-		fprintf(stderr, "invalid format: %s\n", fpath);
-		exit(3);
-	}
-	fclose(fp);
-}
-
-static void
 do_load(BPNN *net)
 {
 	net->input_units = cuio_load_floats("input_units.mem", net->input_n + 1, CUIO_MODE_READONLY);
@@ -193,13 +169,29 @@ do_load(BPNN *net)
 	net->output_delta = cuio_alloc_mem((net->output_n + 1) * sizeof(float));
 }
 
+static void
+confer_load(FILE *fp, const char *fpath, void *ctx)
+{
+	char	buf[1024];
+	BPNN	*net = (BPNN *)ctx;
+
+	if (fgets(buf, 1024, fp) == NULL) {
+		fprintf(stderr, "cannot get a network configurations: %s\n", fpath);
+		exit(2);
+	}
+	if (sscanf(buf, "%ld %ld %ld", &net->input_n, &net->hidden_n, &net->output_n) != 3) {
+		fprintf(stderr, "invalid format: %s\n", fpath);
+		exit(3);
+	}
+}
+
 BPNN *
-bpnn_load(const char *folder)
+bpnn_load(void)
 {
 	BPNN	*net;
 
 	net = bpnn_create(0, 0, 0);
-	load_conf(net, folder);
+	cuio_load_conf(confer_load, net);
 	do_load(net);
 	return net;
 }
