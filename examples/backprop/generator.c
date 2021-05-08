@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <string.h>
 
 #include "backprop.h"
 
@@ -25,17 +26,24 @@ randomize_output(BPNN *net)
 	long	i;
 	for (i = 0; i <= net->output_n; i++) {
 		//w[i] = (float)rand() / RAND_MAX;
-		net->target[i] = 0.1;
+		CUIO_FLOATS_ITEM(net->target, i) = 0.1;
 	}
 }
 
 static void
 randomize_bpnn(BPNN *net)
 {
-	randomize_floats(net->input_units, net->input_n + 1);
-	randomize_floats(net->input_weights, (net->input_n + 1) * (net->hidden_n + 1));
-	randomize_floats(net->hidden_weights, (net->hidden_n + 1) * (net->output_n + 1));
+	randomize_floats(CUIO_FLOATS_H(net->input_units), net->input_n + 1);
+	randomize_floats(CUIO_FLOATS_H(net->input_weights), (net->input_n + 1) * (net->hidden_n + 1));
+	randomize_floats(CUIO_FLOATS_H(net->hidden_weights), (net->hidden_n + 1) * (net->output_n + 1));
 	randomize_output(net);
+}
+
+static void
+zero_prev_weights(BPNN *net)
+{
+	memset(net->input_prev_weights.ptr_h, 0, sizeof(float) * (net->input_n + 1) * (net->hidden_n + 1));
+	memset(net->hidden_prev_weights.ptr_h, 0, sizeof(float) * (net->hidden_n + 1) * (net->output_n + 1));
 }
 
 static void
@@ -60,44 +68,30 @@ generate_bpnn(const char *folder, int n_inp)
 {
 	BPNN	*net;
 	int	n_hid = 16, n_out = 1;
-	char	fpath[256];
 
 	srand(7);
 
 	net = bpnn_create(n_inp, n_hid, n_out);
 
-	net->input_units = cuio_load_floats(NULL, n_inp + 1, CUIO_MODE_NONE);
-	net->target = cuio_load_floats(NULL, n_out + 1, CUIO_MODE_NONE);
-	net->input_weights = cuio_load_floats(NULL, (n_inp + 1) * (n_hid + 1), CUIO_MODE_NONE);
-	net->hidden_weights = cuio_load_floats(NULL, (n_hid + 1) * (n_out + 1), CUIO_MODE_NONE);
-
+	net->input_units = cuio_alloc_mem((n_inp + 1) * sizeof(float));
+	net->target = cuio_alloc_mem((n_out + 1) * sizeof(float));
+	net->input_weights = cuio_alloc_mem((n_inp + 1) * (n_hid + 1) * sizeof(float));
+	net->hidden_weights = cuio_alloc_mem((n_hid + 1) * (n_out + 1) * sizeof(float));
 	randomize_bpnn(net);
 
-	snprintf(fpath, 256, "%s/input_units.mem", folder);
-	cuio_unload_floats(fpath, net->input_n + 1, net->input_units, CUIO_MODE_WRITEONLY);
-	snprintf(fpath, 256, "%s/target.mem", folder);
-	cuio_unload_floats(fpath, net->output_n + 1, net->target, CUIO_MODE_WRITEONLY);
-	snprintf(fpath, 256, "%s/input_weights.mem", folder);
-	cuio_unload_floats(fpath, (net->input_n + 1) * (net->hidden_n + 1), net->input_weights, CUIO_MODE_WRITEONLY);
-	snprintf(fpath, 256, "%s/hidden_weights.mem", folder);
-	cuio_unload_floats(fpath, (net->hidden_n + 1) * (net->output_n + 1), net->hidden_weights, CUIO_MODE_WRITEONLY);
+	net->input_prev_weights = cuio_alloc_mem((n_inp + 1) * (n_hid + 1) * sizeof(float));
+	net->hidden_prev_weights = cuio_alloc_mem((n_hid + 1) * (n_out + 1) * sizeof(float));
+	zero_prev_weights(net);
+
+	cuio_unload_floats("input_units.mem", &net->input_units);
+	cuio_unload_floats("target.mem", &net->target);
+	cuio_unload_floats("input_weights.mem", &net->input_weights);
+	cuio_unload_floats("hidden_weights.mem", &net->hidden_weights);
+	cuio_unload_floats("input_weights.prev.mem", &net->input_prev_weights);
+	cuio_unload_floats("hidden_weights.prev.mem", &net->hidden_prev_weights);
 
 	save_net_conf(net, folder);
 	bpnn_free(net);
-}
-
-static void
-check_folder(const char *folder)
-{
-	if (access(folder, F_OK) == 0) {
-		fprintf(stderr, "folder exist: %s\n", folder);
-		fprintf(stderr, "You should provide a non-existent folder\n");
-		exit(1);
-	}
-	if (mkdir(folder, 0700) < 0) {
-		fprintf(stderr, "cannot make directory: %s\n", folder);
-		exit(2);
-	}
 }
 
 int
@@ -114,12 +108,12 @@ main(int argc, char *argv[])
 	n_inp = atol(argv[1]);
 
 	folder = argv[2];
+
 	n_inp = (n_inp / 16) * 16;
 
 	printf("input size: %ld\n", n_inp);
 
-	check_folder(folder);
-
+	cuio_init(CUIO_TYPE_HOST, folder, 1);
 	generate_bpnn(folder, n_inp);
 
 	return 0;

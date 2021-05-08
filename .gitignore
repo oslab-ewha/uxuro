@@ -22,11 +22,8 @@ cscope.files
 /config.status
 /examples/Makefile
 /examples/backprop/Makefile
-/examples/backprop/backprop.cudamemcpy
-/examples/backprop/backprop.hostreg
-/examples/backprop/backprop.nvmgpu
-/examples/backprop/backprop.uvm
-/examples/backprop/generator
+/examples/backprop/backprop
+/examples/backprop/backprop.gen
 /examples/common/Makefile
 /examples/common/libutil.a
 /library/src/Makefile

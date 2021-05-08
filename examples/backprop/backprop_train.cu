@@ -31,7 +31,9 @@ backprop_train_cuda(BPNN *net, train_result_t *pres)
 	shmsize = (16 + 16 * 16) * sizeof(float);
 
 	init_tickcount();
-	bpnn_layerforward_CUDA<<<grid, threads, shmsize>>>(net->kernel_input_units, net->kernel_input_weights, net->kernel_partial_sum,
+	bpnn_layerforward_CUDA<<<grid, threads, shmsize>>>(CUIO_FLOATS_D(net->input_units),
+							   CUIO_FLOATS_D(net->input_weights),
+							   CUIO_FLOATS_D(net->partial_sum),
 							   net->input_n, net->hidden_n);
  
 	CUDA_CALL_SAFE(cudaDeviceSynchronize());
@@ -57,8 +59,9 @@ backprop_train_cuda(BPNN *net, train_result_t *pres)
 	pres->kernel_ticks_cpu = get_tickcount();
 
 	init_tickcount();
-	bpnn_adjust_weights_cuda<<<grid, threads>>>(net->kernel_hidden_delta, net->hidden_n, net->kernel_input_units,
-						    net->input_n, net->kernel_input_weights, net->kernel_prev_weights);
+	bpnn_adjust_weights_cuda<<<grid, threads>>>(CUIO_FLOATS_D(net->hidden_delta), net->hidden_n,
+						    CUIO_FLOATS_D(net->input_units),  net->input_n,
+						    CUIO_FLOATS_D(net->input_weights), CUIO_FLOATS_D(net->input_prev_weights));
 
 	CUDA_CALL_SAFE(cudaDeviceSynchronize());
 	pres->kernel_ticks_gpu += get_tickcount();
@@ -75,8 +78,7 @@ backprop_train(const char *folder)
 
 	init_tickcount();
 
-	net = bpnn_create(0, 0, 0);
-	bpnn_load(net, folder);
+	net = bpnn_load(folder);
 
 	pre_ticks = get_tickcount();
 
@@ -86,7 +88,7 @@ backprop_train(const char *folder)
 	backprop_train_cuda(net, &res);
 
 	init_tickcount();
-	bpnn_save(net, folder);
+	bpnn_save(net);
 	bpnn_free(net);
 	post_ticks = get_tickcount();
 

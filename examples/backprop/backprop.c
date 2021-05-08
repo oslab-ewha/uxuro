@@ -30,6 +30,6 @@ main(int argc, char *argv[])
 	}
 
 	folder = argv[1];
-
+	cuio_init(CUIO_TYPE_NONE, folder, 0);
 	return backprop_train(folder);
 }
