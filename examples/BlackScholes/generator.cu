@@ -46,12 +46,15 @@ static void
 gen_inputs(long n_inputs)
 {
 	cuio_ptr_t	stockPrice, optionStrike, optionYears;
+	cuio_ptr_t	callResult, putResult;
 	long	input_size = n_inputs * sizeof(float);
 	long	i;
 
 	stockPrice = cuio_alloc_mem(input_size);
 	optionStrike = cuio_alloc_mem(input_size);
 	optionYears = cuio_alloc_mem(input_size);
+	callResult = cuio_alloc_mem(input_size);
+	putResult = cuio_alloc_mem(input_size);
 
 	//Generate options set
 	for (i = 0; i < n_inputs; i++) {
@@ -63,6 +66,8 @@ gen_inputs(long n_inputs)
 	cuio_unload_floats("StockPrice.mem", &stockPrice);
 	cuio_unload_floats("OptionStrike.mem", &optionStrike);
 	cuio_unload_floats("OptionYears.mem", &optionYears);
+	cuio_unload_floats("CallResult.mem", &callResult);
+	cuio_unload_floats("PutResult.mem", &putResult);
 }
 
 #define N_BATCH_MAX	500000000
@@ -82,6 +87,7 @@ main(int argc, char *argv[])
 	folder = argv[2];
 
 	cuio_init(CUIO_TYPE_GENERATOR, folder);
+	cuio_save_conf(confer_save, &n_opts);
 
 	printf("...generating BlackScholes input data: # Option: %ld\n", n_opts);
 
@@ -94,7 +100,6 @@ main(int argc, char *argv[])
 		n_opts -= n_inputs;
 	}
 
-	cuio_save_conf(confer_save, &n_opts);
 	printf("done\n");
 	return 0;
 }
