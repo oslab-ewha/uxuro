@@ -42,42 +42,19 @@ confer_save(FILE *fp, const char *fpath, void *ctx)
 	fprintf(fp, "%lu", *(long *)ctx);
 }
 
-int
-main(int argc, char *argv[])
+static void
+gen_inputs(long n_inputs)
 {
-	long	opt_n, opt_size;
-	char	*folder;
-
-	if (argc != 3) {
-		fprintf(stderr, "Usage: %s <OPT_N> <folder>\n", argv[0]);
-		exit(EXIT_FAILURE);
-	}
-
-	opt_n = atol(argv[1]);
-	opt_size = opt_n * sizeof(float);
-	folder = argv[2];
-
-	cuio_init(CUIO_TYPE_HOST, folder, 1);
-
-	// Start logs
-	printf("[%s] - Starting...\n", argv[0]);
-
-	//'h_' prefix - CPU (host) memory space
 	cuio_ptr_t	stockPrice, optionStrike, optionYears;
-
+	long	input_size = n_inputs * sizeof(float);
 	long	i;
 
-	printf("Initializing data...\n");
-	printf("...allocating CPU memory for options.\n");
-	stockPrice = cuio_alloc_mem(opt_size);
-	optionStrike = cuio_alloc_mem(opt_size);
-	optionYears = cuio_alloc_mem(opt_size);
-
-	printf("...generating input data in CPU mem.\n");
-	srand(5347);
+	stockPrice = cuio_alloc_mem(input_size);
+	optionStrike = cuio_alloc_mem(input_size);
+	optionYears = cuio_alloc_mem(input_size);
 
 	//Generate options set
-	for (i = 0; i < opt_n; i++) {
+	for (i = 0; i < n_inputs; i++) {
 		CUIO_FLOATS_ITEM(stockPrice, i) = RandFloat(5.0f, 30.0f);
 		CUIO_FLOATS_ITEM(optionStrike, i) = RandFloat(1.0f, 100.0f);
 		CUIO_FLOATS_ITEM(optionYears, i) = RandFloat(0.25f, 10.0f);
@@ -86,8 +63,38 @@ main(int argc, char *argv[])
 	cuio_unload_floats("StockPrice.mem", &stockPrice);
 	cuio_unload_floats("OptionStrike.mem", &optionStrike);
 	cuio_unload_floats("OptionYears.mem", &optionYears);
+}
 
-	cuio_save_conf(confer_save, &opt_n);
+#define N_BATCH_MAX	500000000
 
+int
+main(int argc, char *argv[])
+{
+	long	n_opts;
+	char	*folder;
+
+	if (argc != 3) {
+		fprintf(stderr, "Usage: %s <# of options> <folder>\n", argv[0]);
+		exit(EXIT_FAILURE);
+	}
+
+	n_opts = atol(argv[1]);
+	folder = argv[2];
+
+	cuio_init(CUIO_TYPE_GENERATOR, folder);
+
+	printf("...generating BlackScholes input data: # Option: %ld\n", n_opts);
+
+	srand(5347);
+
+	while (n_opts > 0) {
+		long	n_inputs = n_opts > N_BATCH_MAX ? N_BATCH_MAX: n_opts;
+
+		gen_inputs(n_inputs);
+		n_opts -= n_inputs;
+	}
+
+	cuio_save_conf(confer_save, &n_opts);
+	printf("done\n");
 	return 0;
 }

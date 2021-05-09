@@ -13,6 +13,7 @@ extern "C" {
 
 typedef enum {
 	CUIO_TYPE_NONE,
+	CUIO_TYPE_GENERATOR,
 	CUIO_TYPE_HOST,
 	CUIO_TYPE_UVM,
 	CUIO_TYPE_HOSTREG,
@@ -33,7 +34,7 @@ typedef struct {
 
 typedef void (*cuio_confer_t)(FILE *fp, const char *fpath, void *ctx);
 
-void cuio_init(cuio_type_t type, const char *folder, int create_folder);
+void cuio_init(cuio_type_t type, const char *folder);
 
 cuio_ptr_t cuio_alloc_mem(size_t len);
 void cuio_free_mem(cuio_ptr_t *pptr);

@@ -19,16 +19,16 @@ static const char	*folder_base;
 static cuio_type_t	type = CUIO_TYPE_NONE;
 
 static void
-check_folder(int create_folder)
+check_folder(void)
 {
 	if (access(folder_base, F_OK) == 0) {
-		if (create_folder) {
+		if (type == CUIO_TYPE_GENERATOR) {
 			fprintf(stderr, "folder exist: %s\n", folder_base);
 			fprintf(stderr, "You should provide a non-existent folder\n");
 			exit(1);
 		}
 	}
-	else if (create_folder) {
+	else if (type == CUIO_TYPE_GENERATOR) {
 		if (mkdir(folder_base, 0700) < 0) {
 			fprintf(stderr, "cannot make directory: %s\n", folder_base);
 			exit(2);
@@ -41,10 +41,9 @@ check_folder(int create_folder)
 }
 
 void
-cuio_init(cuio_type_t _type, const char *folder, int create_folder)
+cuio_init(cuio_type_t _type, const char *folder)
 {
 	type = _type;
-
 	if (type == CUIO_TYPE_NONE) {
 		const char	*typestr = getenv("CUIO_TYPE");
 
@@ -60,7 +59,7 @@ cuio_init(cuio_type_t _type, const char *folder, int create_folder)
 			type = CUIO_TYPE_HOST;
 	}
 	folder_base = strdup(folder);
-	check_folder(create_folder);
+	check_folder();
 }
 
 cuio_ptr_t
@@ -68,13 +67,16 @@ cuio_alloc_mem(size_t len)
 {
 	cuio_ptr_t	ptr;
 
-	if (type == CUIO_TYPE_HOST) {
+	if (type == CUIO_TYPE_HOST || type == CUIO_TYPE_GENERATOR) {
 		ptr.ptr_h = malloc(len);
 		if (ptr.ptr_h == NULL) {
 			fprintf(stderr, "out of memory\n");
 			exit(EXIT_FAILURE);
 		}
-		CUDA_CALL_SAFE(cudaMalloc((void**)&ptr.ptr_d, len));
+		if (type == CUIO_TYPE_GENERATOR)
+			ptr.ptr_d = NULL;
+		else
+			CUDA_CALL_SAFE(cudaMalloc((void**)&ptr.ptr_d, len));
 	}
 	else {
 		CUDA_CALL_SAFE(cudaMallocManaged(&ptr.ptr_h, len, cudaMemAttachGlobal));
@@ -92,7 +94,7 @@ cuio_free_mem(cuio_ptr_t *pptr)
 		return;
 	if (pptr->ptr_d)
 		CUDA_CALL_SAFE(cudaFree(pptr->ptr_d));
-	if (pptr->type == CUIO_TYPE_HOST && pptr->ptr_h)
+	if ((pptr->type == CUIO_TYPE_HOST || pptr->type == CUIO_TYPE_GENERATOR) && pptr->ptr_h)
 		free(pptr->ptr_h);
 }
 
@@ -151,8 +153,10 @@ static void
 unload_by_write(const char *fpath, cuio_ptr_t *pptr)
 {
 	FILE	*fp;
+	const char	*wr_mode;
 
-	if ((fp = fopen(fpath, "wb")) == 0) {
+	wr_mode = (type == CUIO_TYPE_GENERATOR) ? "ab+": "wb";
+	if ((fp = fopen(fpath, wr_mode)) == 0) {
 		fprintf(stderr, "Cannot open: %s\n", fpath);
 		exit(EXIT_FAILURE);
 	}

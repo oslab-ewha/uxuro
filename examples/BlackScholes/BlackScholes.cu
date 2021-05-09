@@ -75,7 +75,7 @@ main(int argc, char *argv[])
 
 	folder = argv[1];
 
-	cuio_init(CUIO_TYPE_NONE, folder, 0);
+	cuio_init(CUIO_TYPE_NONE, folder);
 	cuio_load_conf(confer_load, &opt_n);
 
 	printf("Initializing data...\n");

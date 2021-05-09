@@ -104,7 +104,7 @@ main(int argc, char *argv[])
 
 	printf("input size: %ld\n", n_inp);
 
-	cuio_init(CUIO_TYPE_HOST, folder, 1);
+	cuio_init(CUIO_TYPE_GENERATOR, folder);
 	generate_bpnn(n_inp);
 
 	return 0;
