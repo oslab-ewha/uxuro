@@ -2883,9 +2883,13 @@ static NV_STATUS block_copy_resident_pages(uvm_va_block_t *block,
                                      BLOCK_TRANSFER_MODE_INTERNAL_MOVE_TO_STAGE;
     }
 
+    /*
+     * TODO: copy is always enabled when cause == UVM_MAKE_RESIDENT_CAUSE_EVICTION.
+     * This will drop performance but it's a simple workaround.
+     * A kernel panic occurs when copy with UVM_NVMGPU_FLAG_READ is skipped.
+     */
     if (!uvm_nvmgpu_is_managed(block->va_range)
-        || (cause != UVM_MAKE_RESIDENT_CAUSE_EVICTION && cause != UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && cause != UVM_MAKE_RESIDENT_CAUSE_NVMGPU) 
-        || (cause == UVM_MAKE_RESIDENT_CAUSE_EVICTION && uvm_nvmgpu_need_to_evict_from_gpu(block)) 
+        || (cause != UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && cause != UVM_MAKE_RESIDENT_CAUSE_NVMGPU) 
         || (cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && UVM_ID_IS_CPU(dst_id) && uvm_nvmgpu_need_to_evict_from_gpu(block))
         || (cause == UVM_MAKE_RESIDENT_CAUSE_NVMGPU && UVM_ID_IS_GPU(dst_id))
     ) {
