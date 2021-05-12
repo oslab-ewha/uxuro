@@ -84,14 +84,27 @@ cuio_alloc_mem(size_t len)
 	}
 	ptr.type = type;
 	ptr.size = len;
+	ptr.mapped = 0;
 	return ptr;
 }
+
+static void munmap_by_dragon(const char *fpath, cuio_ptr_t *pptr);
+static void munmap_by_hostreg(const char *fpath, cuio_ptr_t *pptr);
 
 void
 cuio_free_mem(cuio_ptr_t *pptr)
 {
-	if (pptr->type == CUIO_TYPE_DRAGON || pptr->type == CUIO_TYPE_HOSTREG)
-		return;
+	if (pptr->type == CUIO_TYPE_DRAGON || pptr->type == CUIO_TYPE_HOSTREG) {
+		if (pptr->mapped) {
+			if (pptr->type == CUIO_TYPE_DRAGON) {
+				munmap_by_dragon("", pptr);
+			}
+			else {
+				munmap_by_hostreg("", pptr);
+			}
+			return;
+		}
+	}
 	if (pptr->ptr_d)
 		CUDA_CALL_SAFE(cudaFree(pptr->ptr_d));
 	if ((pptr->type == CUIO_TYPE_HOST || pptr->type == CUIO_TYPE_GENERATOR) && pptr->ptr_h)
@@ -195,6 +208,7 @@ mmap_by_dragon(const char *fpath, size_t len, cuio_mode_t mode)
 	ptr.ptr_d = ptr.ptr_h;
 	ptr.size = len;
 	ptr.type = CUIO_TYPE_DRAGON;
+	ptr.mapped = 1;
 	return ptr;
 }
 
@@ -228,6 +242,7 @@ mmap_by_hostreg(const char *fpath, size_t len, cuio_mode_t mode)
 	ptr.ptr_d = ptr.ptr_h;
 	ptr.size = len;
 	ptr.type = CUIO_TYPE_HOSTREG;
+	ptr.mapped = 1;
 	return ptr;
 }
 

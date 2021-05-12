@@ -30,6 +30,7 @@ typedef struct {
 	void	*ptr_h, *ptr_d;
 	size_t	size;
 	cuio_type_t	type;
+	int	mapped;
 } cuio_ptr_t;
 
 typedef void (*cuio_confer_t)(FILE *fp, const char *fpath, void *ctx);
