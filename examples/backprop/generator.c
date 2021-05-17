@@ -49,9 +49,9 @@ zero_prev_weights(BPNN *net)
 static void
 confer_save(FILE *fp, const char *fpath, void *ctx)
 {
-	BPNN	*net = (BPNN *)ctx;
+	long	*pn_inputs = (long *)ctx;
 
-	fprintf(fp, "%ld %ld %ld", net->input_n, net->hidden_n, net->output_n);
+	fprintf(fp, "%ld 16 1", *pn_inputs);
 }
 
 static void
@@ -59,8 +59,6 @@ generate_bpnn(int n_inp)
 {
 	BPNN	*net;
 	int	n_hid = 16, n_out = 1;
-
-	srand(7);
 
 	net = bpnn_create(n_inp, n_hid, n_out);
 
@@ -81,14 +79,15 @@ generate_bpnn(int n_inp)
 	cuio_unload_floats("input_weights.prev.mem", &net->input_prev_weights);
 	cuio_unload_floats("hidden_weights.prev.mem", &net->hidden_prev_weights);
 
-	cuio_save_conf(confer_save, net);
 	bpnn_free(net);
 }
+
+#define N_BATCH_MAX	1000000
 
 int
 main(int argc, char *argv[])
 {
-	long	n_inp;
+	long	n_inputs_arg;
 	char	*folder;
 
 	if (argc != 3) {
@@ -96,16 +95,25 @@ main(int argc, char *argv[])
 		return 1;
 	}
 
-	n_inp = atol(argv[1]);
+	n_inputs_arg = atol(argv[1]);
 
 	folder = argv[2];
 
-	n_inp = (n_inp / 16) * 16;
+	n_inputs_arg = (n_inputs_arg / 16) * 16;
 
-	printf("input size: %ld\n", n_inp);
+	printf("input size: %ld\n", n_inputs_arg);
 
 	cuio_init(CUIO_TYPE_GENERATOR, folder);
-	generate_bpnn(n_inp);
+	srand(7);
+	cuio_save_conf(confer_save, &n_inputs_arg);
 
+	while (n_inputs_arg > 0) {
+		long	n_inputs = n_inputs_arg > N_BATCH_MAX ? N_BATCH_MAX: n_inputs_arg;
+
+		generate_bpnn(n_inputs);
+		n_inputs_arg -= n_inputs;
+	}
+
+	printf("done\n");
 	return 0;
 }

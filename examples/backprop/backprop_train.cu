@@ -78,7 +78,7 @@ backprop_train(const char *folder)
 
 	init_tickcount();
 
-	net = bpnn_load(folder);
+	net = bpnn_load();
 
 	pre_ticks = get_tickcount();
 
