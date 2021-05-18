@@ -1587,9 +1587,6 @@ static NV_STATUS service_fault_batch(uvm_gpu_t *gpu,
             status = invalidate_status;
     }
 
-    if (uvm_nvmgpu_has_to_reclaim_blocks(&va_space->nvmgpu_va_space))
-        uvm_nvmgpu_reduce_memory_consumption(va_space);
-
 fail:
     if (va_space != NULL) {
         uvm_va_space_up_read(va_space);
@@ -1598,6 +1595,9 @@ fail:
             uvm_va_space_mm_release(va_space);
         }
     }
+
+    if (uvm_nvmgpu_has_to_reclaim_blocks(&va_space->nvmgpu_va_space))
+        uvm_nvmgpu_reduce_memory_consumption(va_space);
 
     return status;
 }

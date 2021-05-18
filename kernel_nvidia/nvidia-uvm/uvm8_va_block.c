@@ -914,6 +914,12 @@ static NV_STATUS block_populate_page_cpu(uvm_va_block_t *block, uvm_page_index_t
         page = assign_pagecache(block, page_index);
 	if (page)
 		uvm_page_mask_set(&block->cpu.pagecached, page_index);
+	else {
+		page = assign_page(block, zero);
+		if (page) {
+			uvm_page_mask_clear(&block->cpu.pagecached, page_index);
+		}
+	}
     }
     else {
         page = assign_page(block, zero);

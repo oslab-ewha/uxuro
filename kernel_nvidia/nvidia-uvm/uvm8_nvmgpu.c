@@ -69,7 +69,7 @@ NV_STATUS uvm_nvmgpu_initialize(uvm_va_space_t *va_space, unsigned long trash_nr
 	/* TODO: Lower down the locking order.
 	 * Because invalid locking order warnings are generated when debug mode is enabled.
 	 */
-        uvm_mutex_init(&nvmgpu_va_space->lock, UVM_LOCK_ORDER_VA_BLOCK);
+        uvm_mutex_init(&nvmgpu_va_space->lock, UVM_LOCK_ORDER_VA_SPACE);
         nvmgpu_va_space->trash_nr_blocks = trash_nr_blocks;
         nvmgpu_va_space->trash_reserved_nr_pages = trash_reserved_nr_pages;
         nvmgpu_va_space->flags = flags;
@@ -149,14 +149,10 @@ NV_STATUS uvm_nvmgpu_register_file_va_space(uvm_va_space_t *va_space, UVM_NVMGPU
         goto _register_err_1;
     }
 
-    if ((nvmgpu_rtn->flags & UVM_NVMGPU_FLAG_VOLATILE)
-        || (nvmgpu_rtn->flags & UVM_NVMGPU_FLAG_USEHOSTBUF)
-    ) {
-        nvmgpu_rtn->iov = kmalloc(sizeof(struct iovec) * PAGES_PER_UVM_VA_BLOCK, GFP_KERNEL);
-        if (!nvmgpu_rtn->iov) {
-            ret = NV_ERR_NO_MEMORY;
-            goto _register_err_2;
-        }
+    nvmgpu_rtn->iov = kmalloc(sizeof(struct iovec) * PAGES_PER_UVM_VA_BLOCK, GFP_KERNEL);
+    if (!nvmgpu_rtn->iov) {
+        ret = NV_ERR_NO_MEMORY;
+        goto _register_err_2;
     }
 
     return NV_OK; 
@@ -280,9 +276,13 @@ static NV_STATUS insert_pagecache_to_va_block(uvm_va_block_t *va_block, int page
     lock_page(page);
 
     if (va_block->cpu.pages[page_id] != page) {
-        if (va_block->cpu.pages[page_id] != NULL)
+        if (va_block->cpu.pages[page_id] != NULL) {
             uvm_nvmgpu_unmap_page(va_block, page_id);
-
+            if (uvm_page_mask_test(&va_block->cpu.pagecached, page_id))
+                put_page(page);
+	    else
+                __free_page(page);
+	}
         for_each_gpu_id(gpu_id) {
             uvm_gpu_t *gpu;
             uvm_va_block_gpu_state_t *gpu_state = va_block->gpus[uvm_id_gpu_index(gpu_id)];
@@ -303,6 +303,11 @@ static NV_STATUS insert_pagecache_to_va_block(uvm_va_block_t *va_block, int page
         }
         va_block->cpu.pages[page_id] = page;
     }
+    else {
+        put_page(page);
+    }
+
+    uvm_page_mask_set(&va_block->cpu.pagecached, page_id);
 
     return NV_OK;
 
@@ -635,6 +640,7 @@ page_ok:
         end_index = (isize - 1) >> PAGE_SHIFT;
         if (unlikely(!isize || index > end_index)) {
             put_page(page);
+            page = NULL;
             goto out;
         }
 
@@ -814,13 +820,16 @@ fill_pagecaches_for_read(struct file *nvmgpu_file, uvm_va_block_t *va_block, uvm
     for_each_va_block_page_in_region_mask(page_id, &read_mask, region) {
         loff_t offset = file_start_offset + page_id * PAGE_SIZE;
 
-	if (unlikely(offset >= isize))
-	    break;
+        if (unlikely(offset >= isize)) {
+            struct page	*page = va_block->cpu.pages[page_id];
+            if (page)
+                lock_page(page);
+	    continue;
+	}
         if (prepare_page_for_read(nvmgpu_file, offset, va_block, page_id) != 0) {
             printk(KERN_DEBUG "Cannot prepare page for read at file offset 0x%llx\n", offset);
 	    return false;
         }
-
         UVM_ASSERT(va_block->cpu.pages[page_id]);
     }
 
@@ -936,10 +945,8 @@ NV_STATUS uvm_nvmgpu_read_end(uvm_va_block_t *va_block)
     uvm_page_mask_fill(&read_mask);
     for_each_va_block_page_in_region_mask(page_id, &read_mask, region) {
         page = va_block->cpu.pages[page_id];
-        if (page) {
-            unlock_page(page);
-            put_page(page);
-        }
+        if (page)
+	    unlock_page(page);
     }
 
     return NV_OK;
@@ -1170,6 +1177,8 @@ NV_STATUS uvm_nvmgpu_write_begin(uvm_va_block_t *va_block, bool is_flush)
         }
 
         va_block->cpu.pages[page_id] = page;
+	page_ref_add(page, 1);
+	uvm_page_mask_set(&va_block->cpu.pagecached, page_id);
     }
 
     return status;
@@ -1241,8 +1250,6 @@ NV_STATUS uvm_nvmgpu_reduce_memory_consumption(uvm_va_space_t *va_space)
    /*
     * TODO: locking assertion failed. write lock is required.
     */
-    return NV_OK;
-#if 0
     NV_STATUS status = NV_OK;
 
     uvm_nvmgpu_va_space_t *nvmgpu_va_space = &va_space->nvmgpu_va_space;
@@ -1251,8 +1258,9 @@ NV_STATUS uvm_nvmgpu_reduce_memory_consumption(uvm_va_space_t *va_space)
 
     uvm_va_block_t *va_block;
 
+    uvm_va_space_down_write(va_space);
     // Reclaim blocks based on least recent transfer.
-    uvm_mutex_lock(&nvmgpu_va_space->lock);
+
     while (!list_empty(&nvmgpu_va_space->lru_head) && counter < nvmgpu_va_space->trash_nr_blocks) {
         va_block = list_first_entry(&nvmgpu_va_space->lru_head, uvm_va_block_t, nvmgpu_lru);
 
@@ -1276,10 +1284,10 @@ NV_STATUS uvm_nvmgpu_reduce_memory_consumption(uvm_va_space_t *va_space)
         uvm_nvmgpu_release_block(va_block);
         ++counter;
     }
-    uvm_mutex_unlock(&nvmgpu_va_space->lock);
+
+    uvm_va_space_up_write(va_space);
 
     return status;
-#endif
 }
 
 /**
