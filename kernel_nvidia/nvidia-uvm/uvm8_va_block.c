@@ -3959,10 +3959,10 @@ static void block_unmap_cpu(uvm_va_block_t *block, uvm_va_block_region_t region,
         if (!block_has_valid_mapping_cpu(block, subregion))
             continue;
 
-        if (!uvm_nvmgpu_is_managed(va_range))
-            unmap_mapping_range(&va_range->va_space->mapping,
-                                uvm_va_block_region_start(block, subregion),
-                                uvm_va_block_region_size(subregion), 1);
+        // NOTE: unmap required even for nvmgpu
+        unmap_mapping_range(&va_range->va_space->mapping,
+                            uvm_va_block_region_start(block, subregion),
+                            uvm_va_block_region_size(subregion), 1);
 
         for (pte_bit = 0; pte_bit < UVM_PTE_BITS_CPU_MAX; pte_bit++)
             uvm_page_mask_region_clear(&block->cpu.pte_bits[pte_bit], subregion);

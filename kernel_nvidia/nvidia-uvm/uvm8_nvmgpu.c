@@ -1176,9 +1176,17 @@ NV_STATUS uvm_nvmgpu_write_begin(uvm_va_block_t *va_block, bool is_flush)
             UVM_ASSERT(status == NV_OK);
         }
 
-        va_block->cpu.pages[page_id] = page;
-	page_ref_add(page, 1);
-	uvm_page_mask_set(&va_block->cpu.pagecached, page_id);
+        if (va_block->cpu.pages[page_id] != page) {
+            if (va_block->cpu.pages[page_id]) {
+                if (uvm_page_mask_test(&va_block->cpu.pagecached, page_id))
+                    put_page(va_block->cpu.pages[page_id]);
+                else
+                    __free_page(va_block->cpu.pages[page_id]);
+            }
+            va_block->cpu.pages[page_id] = page;
+            get_page(page);
+        }
+        uvm_page_mask_set(&va_block->cpu.pagecached, page_id);
     }
 
     return status;
