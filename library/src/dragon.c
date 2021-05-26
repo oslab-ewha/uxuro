@@ -41,8 +41,9 @@
 #define DRAGON_INIT_FLAG_ENABLE_AIO_READ	0x04
 #define DRAGON_INIT_FLAG_ENABLE_AIO_WRITE	0x08
 
-static int	nvidia_uvm_fd = -1;
 static int	fadvice = -1;
+static int	fd_uvm = -1;
+static int	initialized;
 
 static int	minsize = MIN_SIZE;
 static int	disabled_dragon = 0;
@@ -64,49 +65,98 @@ typedef struct {
 	unsigned int status;
 } dragon_ioctl_map_t;
 
+static int
+open_uvm_dev(void)
+{
+	int	fd;
+
+	fd = open(NVIDIA_UVM_PATH, O_RDWR);
+	if (fd < 0) {
+		fprintf(stderr, "failed to open: %s\n", NVIDIA_UVM_PATH);
+	}
+	return fd;
+}
+
+static dragonError_t
+try_to_init_uvm(void)
+{
+	void	*addr;
+	cudaError_t	error;
+
+	/* dummy cudaMallocManaged() will initialize uvm */
+	error = cudaMallocManaged(&addr, 1, cudaMemAttachGlobal);
+	if (error != cudaSuccess) {
+		fprintf(stderr, "failed to cudaMallocManaged: %s %s\n", cudaGetErrorName(error), cudaGetErrorString(error));
+		return D_ERR_UVM;
+	}
+	cudaFree(addr);
+	return D_OK;
+}
+
+static dragonError_t
+setup_fd_uvm(void)
+{
+	DIR	*dir;
+	struct dirent	*ent;
+	dragonError_t	err = D_ERR_FILE;
+
+	dir = opendir(PSF_DIR);
+	if (dir == NULL)
+		return D_ERR_FILE;
+
+	while ((ent = readdir(dir)) != NULL) {
+		char	psf_path[512];
+		char	*psf_realpath;
+
+		if (ent->d_type != DT_LNK)
+			continue;
+
+		sprintf(psf_path, "%s/%s", PSF_DIR, ent->d_name);
+		psf_realpath = realpath(psf_path, NULL);
+		if (strcmp(psf_realpath, NVIDIA_UVM_PATH) == 0)
+			fd_uvm = atoi(ent->d_name);
+		free(psf_realpath);
+		if (fd_uvm >= 0) {
+			err = D_OK;
+			break;
+		}
+	}
+	closedir(dir);
+
+	return err;
+}
+
 static dragonError_t
 init_module(void)
 {
-	DIR	*d;
-	struct dirent	*dir;
-	char	psf_path[512];
-	char	*psf_realpath;
 	dragon_ioctl_init_t	request;
-	int	status;
-
+	long	nr_pages;
 	char	*env_val;
 	char	*endptr;
-	long	nr_pages = -1;
+	int	status;
+	dragonError_t	err;
 
-	d = opendir(PSF_DIR);
-	if (d) {
-		while ((dir = readdir(d)) != NULL) {
-			if (dir->d_type == DT_LNK) {
-				sprintf(psf_path, "%s/%s", PSF_DIR, dir->d_name);
-				psf_realpath = realpath(psf_path, NULL);
-				if (strcmp(psf_realpath, NVIDIA_UVM_PATH) == 0)
-					nvidia_uvm_fd = atoi(dir->d_name);
-				free(psf_realpath);
-				if (nvidia_uvm_fd >= 0)
-					break;
-			}
-		}
-		closedir(d);
+	addr_map = g_hash_table_new(NULL, NULL);
+
+	if (secure_getenv("NO_DRAGON")) {
+		disabled_dragon = 1;
+		initialized = 1;
+		return D_OK;
 	}
-	if (nvidia_uvm_fd < 0) {
-		fprintf(stderr, "Cannot open %s\n", PSF_DIR);
+
+	if ((err = try_to_init_uvm()) != D_OK) {
+		fprintf(stderr, "failed to initialize dragon: %d\n", err);
+		return D_ERR_UVM;
+	}
+
+	if ((err = setup_fd_uvm()) != D_OK) {
+		fprintf(stderr, "failed to get uvm fd: %d\n", err);
 		return D_ERR_UVM;
 	}
 
 	env_val = secure_getenv("DRAGON_MINSIZE");
 	if (env_val) {
 		sscanf(env_val, "%u", &minsize);
-	}
-
-	env_val = secure_getenv("NO_DRAGON");
-	if (env_val) {
-		disabled_dragon = 1;
-		goto out;
 	}
 
 	request.trash_nr_blocks = DEFAULT_TRASH_NR_BLOCKS;
@@ -118,8 +168,6 @@ init_module(void)
 		if (*env_val != '\0' && *endptr == '\0')
 			request.trash_reserved_nr_pages = (unsigned long)nr_pages;
 	}
-	fprintf(stderr, "reserved_nr_pages: %lu\n", request.trash_reserved_nr_pages);
-
 	env_val = secure_getenv(DRAGON_ENVNAME_ENABLE_READ_CACHE);
 	if (!(env_val && strncasecmp(env_val, "no", 2) == 0))
 		request.flags |= DRAGON_INIT_FLAG_ENABLE_READ_CACHE;
@@ -148,15 +196,16 @@ init_module(void)
 	else
 		fadvice = POSIX_FADV_NORMAL;
 
-	if ((status = ioctl(nvidia_uvm_fd, DRAGON_IOCTL_INIT, &request)) != 0) {
+	if ((status = ioctl(fd_uvm, DRAGON_IOCTL_INIT, &request)) != 0) {
 		fprintf(stderr, "ioctl init error: %d\n", status);
-		return D_ERR_IOCTL;
+		close(fd_uvm);
+		err = D_ERR_IOCTL;
+	}
+	else {
+		initialized = 1;
 	}
 
-out:
-	addr_map = g_hash_table_new(NULL, NULL);
-
-	return D_OK;
+	return err;
 }
 
 #define BUFSIZE	(1024 * 4)
@@ -220,6 +269,7 @@ static dragonError_t
 do_dragon_map(dragon_ioctl_map_t *request)
 {
 	int	status;
+	dragonError_t	err = D_OK;
 
 	if ((request->flags & D_F_READ) && !(request->flags & D_F_VOLATILE)) {
 		if ((status = posix_fadvise(request->backing_fd, 0, 0, fadvice)) != 0)
@@ -228,19 +278,18 @@ do_dragon_map(dragon_ioctl_map_t *request)
 			fprintf(stderr, "readahead error.\n");
 	}
 
-	if ((status = ioctl(nvidia_uvm_fd, DRAGON_IOCTL_MAP, request)) != 0) {
+	if ((status = ioctl(fd_uvm, DRAGON_IOCTL_MAP, request)) != 0) {
 		fprintf(stderr, "ioctl error: %d\n", status);
-		return D_ERR_IOCTL;
+		err = D_ERR_IOCTL;
 	}
 
-	return D_OK;
+	return err;
 }
 
 static void
 free_request(dragon_ioctl_map_t *request)
 {
 	close(request->backing_fd);
-	cudaFree(request->uvm_addr);
 	free(request);
 }
 
@@ -253,23 +302,15 @@ dragon_map(const char *filename, size_t size, unsigned short flags, void **paddr
 	cudaError_t	error;
 	int		ret = D_OK;
 
+	if (!initialized) {
+		ret = init_module();
+		if (ret != D_OK)
+			return ret;
+	}
+
 	if ((request = (dragon_ioctl_map_t *)calloc(1, sizeof(dragon_ioctl_map_t))) == NULL) {
 		fprintf(stderr, "Cannot calloc dragon_ioctl_map_t\n");
 		return D_ERR_MEM;
-	}
-
-	error = cudaMallocManaged(paddr, size >= minsize ? size : minsize, cudaMemAttachGlobal);
-	if (error != cudaSuccess) {
-		fprintf(stderr, "cudaMallocManaged error: %s %s\n", cudaGetErrorName(error), cudaGetErrorString(error));
-		return D_ERR_UVM;
-	}
-
-	if (nvidia_uvm_fd < 0) {
-		ret = init_module();
-		if (ret != D_OK) {
-			cudaFree(*paddr);
-			return ret;
-		}
 	}
 
 	f_flags = O_RDWR | O_LARGEFILE;
@@ -281,21 +322,18 @@ dragon_map(const char *filename, size_t size, unsigned short flags, void **paddr
 
 	if ((f_fd = open(filename, f_flags)) < 0) {
 		fprintf(stderr, "Cannot open the file %s\n", filename);
-		ret = D_ERR_FILE;
-		cudaFree(*paddr);
-		return ret;
+		free(request);
+		return D_ERR_FILE;
 	}
 
 	if ((flags & D_F_CREATE) && ftruncate(f_fd, size) != 0) {
 		fprintf(stderr, "Cannot truncate the file %s\n", filename);
-		ret = D_ERR_FILE;
 		close(f_fd);
-		cudaFree(*paddr);
-		return ret;
+		free(request);
+		return D_ERR_FILE;
 	}
 
 	request->backing_fd = f_fd;
-	request->uvm_addr = *paddr;
 	request->size = size;
 	request->flags = flags;
 
@@ -317,22 +355,30 @@ dragon_remap(void *addr, unsigned short flags)
 {
 	int	status;
 	dragon_ioctl_map_t	*request = g_hash_table_lookup(addr_map, addr);
+	int	fd;
+	dragonError_t	err = D_OK;
 
 	if (request == NULL) {
 		fprintf(stderr, "%p is not mapped via dragon_map\n", addr);
 		return D_ERR_INTVAL;
 	}
 
+	fd = open_uvm_dev();
+	if (fd < 0)
+		return D_ERR_UVM;
+
 	cudaDeviceSynchronize();
 
 	request->flags = flags;
 
-	if ((status = ioctl(nvidia_uvm_fd, DRAGON_IOCTL_REMAP, request)) != 0) {
+	if ((status = ioctl(fd, DRAGON_IOCTL_REMAP, request)) != 0) {
 		fprintf(stderr, "ioctl error: %d\n", status);
-		return D_ERR_IOCTL;
+		err = D_ERR_IOCTL;
 	}
 
-	return D_OK;
+	close(fd);
+
+	return err;
 }
 
 dragonError_t
