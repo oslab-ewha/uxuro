@@ -209,6 +209,8 @@ NV_STATUS uvm_va_space_create(struct inode *inode, struct file *filp)
     list_add_tail(&va_space->list_node, &g_uvm_global.va_spaces.list);
     uvm_mutex_unlock(&g_uvm_global.va_spaces.lock);
 
+    va_space->nvmgpu_va_space.fd_pending = -1;
+
     return NV_OK;
 
 fail:

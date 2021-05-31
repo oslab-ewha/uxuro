@@ -342,8 +342,10 @@ dragon_map(const char *filename, size_t size, unsigned short flags, void **paddr
 	else
 		ret = do_dragon_map(request);
 
-	if (ret == D_OK)
+	if (ret == D_OK) {
+		*paddr = request->uvm_addr;
 		g_hash_table_insert(addr_map, request->uvm_addr, request);
+	}
 	else
 		free_request(request);
 

@@ -767,6 +767,7 @@ static int uvm_mmap(struct file *filp, struct vm_area_struct *vma)
     NV_STATUS status = uvm_global_get_status();
     int ret = 0;
     bool vma_wrapper_allocated = false;
+    int pm_locked = 0;
 
     if (status != NV_OK)
         return -nv_status_to_errno(status);
@@ -785,7 +786,7 @@ static int uvm_mmap(struct file *filp, struct vm_area_struct *vma)
     // UVM mappings are required to set offset == VA. This simplifies things
     // since we don't have to worry about address aliasing (except for fork,
     // handled separately) and it makes unmap_mapping_range simpler.
-    if (vma->vm_start != (vma->vm_pgoff << PAGE_SHIFT)) {
+    if (!va_space->nvmgpu_va_space.is_initailized && vma->vm_start != (vma->vm_pgoff << PAGE_SHIFT)) {
         UVM_DBG_PRINT_RL("vm_start 0x%lx != vm_pgoff 0x%lx\n", vma->vm_start, vma->vm_pgoff << PAGE_SHIFT);
         return -EINVAL;
     }
@@ -799,17 +800,31 @@ static int uvm_mmap(struct file *filp, struct vm_area_struct *vma)
         return -EINVAL;
     }
 
-    // If the PM lock cannot be acquired, disable the VMA and report success
-    // to the caller.  The caller is expected to determine whether the
-    // map operation succeeded via an ioctl() call.  This is necessary to
-    // safely handle MAP_FIXED, which needs to complete atomically to prevent
-    // the loss of the virtual address range.
-    if (!uvm_down_read_trylock(&g_uvm_global.pm.lock)) {
-        uvm_disable_vma(vma);
-        return 0;
+    if (!rwsem_is_locked(&g_uvm_global.pm.lock.sem)) {
+        // If the PM lock cannot be acquired, disable the VMA and report success
+        // to the caller.  The caller is expected to determine whether the
+        // map operation succeeded via an ioctl() call.  This is necessary to
+        // safely handle MAP_FIXED, which needs to complete atomically to prevent
+        // the loss of the virtual address range.
+        if (!uvm_down_read_trylock(&g_uvm_global.pm.lock)) {
+            uvm_disable_vma(vma);
+            return 0;
+        }
+        pm_locked = 1;
     }
 
     uvm_record_lock_mmap_sem_write(&current->mm->mmap_sem);
+
+    if (va_space->nvmgpu_va_space.is_initailized && va_space->nvmgpu_va_space.fd_pending >= 0) {
+        struct file	*file_new = fget(va_space->nvmgpu_va_space.fd_pending);
+
+        if (file_new) {
+            file_new->private_data = vma->vm_file->private_data;
+            fput(vma->vm_file);
+            vma->vm_file = file_new;
+            va_space->nvmgpu_va_space.fd_pending = -1;
+        }
+    }
 
     // VM_MIXEDMAP      Required to use vm_insert_page
     //
@@ -878,7 +893,9 @@ out:
 
     uvm_record_unlock_mmap_sem_write(&current->mm->mmap_sem);
 
-    uvm_up_read(&g_uvm_global.pm.lock);
+    if (pm_locked) {
+        uvm_up_read(&g_uvm_global.pm.lock);
+    }
 
     return ret;
 }
@@ -993,7 +1010,12 @@ static const struct file_operations uvm_fops =
 
 bool uvm_file_is_nvidia_uvm(struct file *filp)
 {
-    return (filp != NULL) && (filp->f_op == &uvm_fops);
+#if 0
+   return (filp != NULL) && (filp->f_op == &uvm_fops);
+#else
+   // TODO: more desirable approach required
+   return (filp != NULL) && (filp->private_data != NULL);
+#endif
 }
 
 static int uvm_init(void)

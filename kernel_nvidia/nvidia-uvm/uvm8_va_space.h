@@ -54,6 +54,9 @@ typedef struct uvm_nvmgpu_va_space_t
     // init flags that dictate the optimization behaviors
     unsigned short flags;
 
+    // pending fd for dragon map
+    int fd_pending;
+
     uvm_mutex_t lock;
 
     struct list_head lru_head;
