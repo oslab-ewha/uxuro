@@ -859,7 +859,6 @@ assign_page(uvm_va_block_t *block, bool zero)
     page = alloc_pages(gfp_flags, 0);
     if (!page) {
         uvm_nvmgpu_reduce_memory_consumption(block->va_range->va_space);
-
         page = alloc_pages(gfp_flags, 0);
         if (!page)
             return NULL;
@@ -2207,10 +2206,15 @@ static void block_update_page_dirty_state(uvm_va_block_t *block,
     if (UVM_ID_IS_GPU(dst_id))
         return;
 
-    if (uvm_id_equal(src_id, block->va_range->preferred_location))
-        ClearPageDirty(block->cpu.pages[page_index]);
-    else
-        SetPageDirty(block->cpu.pages[page_index]);
+    if (uvm_page_mask_test(&block->cpu.pagecached, page_index)) {
+	    uvm_nvmgpu_set_page_dirty(block->cpu.pages[page_index]);
+    }
+    else {
+	    if (uvm_id_equal(src_id, block->va_range->preferred_location))
+		    ClearPageDirty(block->cpu.pages[page_index]);
+	    else
+		    SetPageDirty(block->cpu.pages[page_index]);
+    }
 }
 
 static void block_mark_memory_used(uvm_va_block_t *block, uvm_processor_id_t id)
@@ -2480,8 +2484,7 @@ static NV_STATUS block_copy_resident_pages_between(uvm_va_block_t *block,
             uvm_push_set_flag(&push, UVM_PUSH_FLAG_CE_NEXT_PIPELINED);
         }
 
-        if (!uvm_nvmgpu_is_managed(block->va_range))
-            block_update_page_dirty_state(block, dst_id, src_id, page_index);
+        block_update_page_dirty_state(block, dst_id, src_id, page_index);
 
         if (last_index == region.outer) {
             contig_start_index = page_index;
@@ -7855,11 +7858,12 @@ static void block_kill(uvm_va_block_t *block)
                 if (block->cpu.pages[page_index]) {
                     // be conservative.
                     // Tell the OS we wrote to the page because we sometimes clear the dirty bit after writing to it.
-                    SetPageDirty(block->cpu.pages[page_index]);
+
 		    if (uvm_page_mask_test(&block->cpu.pagecached, page_index)) {
 			    put_page(block->cpu.pages[page_index]);
 		    }
 		    else {
+			    SetPageDirty(block->cpu.pages[page_index]);
 			    __free_page(block->cpu.pages[page_index]);
 		    }
                 }

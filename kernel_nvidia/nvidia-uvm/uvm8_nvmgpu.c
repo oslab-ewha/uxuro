@@ -281,9 +281,9 @@ insert_pagecache_to_va_block(uvm_va_block_t *va_block, int page_id, struct page 
 		if (va_block->cpu.pages[page_id] != NULL) {
 			uvm_nvmgpu_unmap_page(va_block, page_id);
 			if (uvm_page_mask_test(&va_block->cpu.pagecached, page_id))
-				put_page(page);
+				put_page(va_block->cpu.pages[page_id]);
 			else
-				__free_page(page);
+				__free_page(va_block->cpu.pages[page_id]);
 		}
 		for_each_gpu_id(gpu_id) {
 			uvm_gpu_t	*gpu;
@@ -893,7 +893,7 @@ uvm_nvmgpu_write_begin(uvm_va_block_t *va_block, bool is_flush)
 
 	file_update_time(nvmgpu_file);
 
-	for (page_id = 0; page_id < PAGES_PER_UVM_VA_BLOCK; ++page_id) {
+	for_each_va_block_page(page_id, va_block) {
 		uvm_gpu_id_t id;
 		long f_status = 0;
 
@@ -962,7 +962,7 @@ uvm_nvmgpu_write_end(uvm_va_block_t *va_block, bool is_flush)
 	loff_t	file_start_offset = va_block->start - va_block->va_range->node.start;
 	loff_t	file_position;
 
-	for (page_id = 0; page_id < PAGES_PER_UVM_VA_BLOCK; ++page_id) {
+	for_each_va_block_page(page_id, va_block) {
 		struct page *page = va_block->cpu.pages[page_id];
 		void *fsdata = fsdata_array[page_id];
 
@@ -1139,4 +1139,17 @@ uvm_nvmgpu_flush_host_block(uvm_va_space_t *va_space, uvm_va_range_t *va_range, 
 	set_fs(fs);
 
 	return status;
+}
+
+void
+uvm_nvmgpu_set_page_dirty(struct page *page)
+{
+	/* Ugly, but we have no way to safely set dirty */
+	int *p = (int *)page_to_virt(page);
+	if (p) {
+		int x;
+		x = *p;
+		*p = (x + 1);
+		*p = x;
+	}
 }

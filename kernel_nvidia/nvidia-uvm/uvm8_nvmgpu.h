@@ -42,6 +42,8 @@ NV_STATUS uvm_nvmgpu_reduce_memory_consumption(uvm_va_space_t *va_space);
 
 NV_STATUS uvm_nvmgpu_prepare_block_for_hostbuf(uvm_va_block_t *va_block);
 
+void uvm_nvmgpu_set_page_dirty(struct page *page);
+
 struct page *assign_pagecache(uvm_va_block_t * block, uvm_page_index_t page_index);
 
 /**
