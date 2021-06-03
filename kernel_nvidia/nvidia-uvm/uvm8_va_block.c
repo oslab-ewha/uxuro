@@ -858,10 +858,7 @@ assign_page(uvm_va_block_t *block, bool zero)
 
     page = alloc_pages(gfp_flags, 0);
     if (!page) {
-        uvm_nvmgpu_reduce_memory_consumption(block->va_range->va_space);
-        page = alloc_pages(gfp_flags, 0);
-        if (!page)
-            return NULL;
+        return NULL;
     }
 
     // the kernel has 'written' zeros to this page, so it is dirty

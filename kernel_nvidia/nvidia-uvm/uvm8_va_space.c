@@ -40,6 +40,7 @@
 #include "uvm_common.h"
 #include "nv_uvm_interface.h"
 #include "nv-kthread-q.h"
+#include "uvm8_nvmgpu.h"
 
 static bool processor_mask_array_test(const uvm_processor_mask_t *mask,
                                       uvm_processor_id_t mask_id,
@@ -358,6 +359,8 @@ void uvm_va_space_destroy(uvm_va_space_t *va_space)
     uvm_global_gpu_id_t global_gpu_id;
     uvm_global_processor_mask_t retained_gpus;
     LIST_HEAD(deferred_free_list);
+
+    stop_pagecache_reducer(va_space);
 
     // Remove the VA space from the global list before we start tearing things
     // down so other threads can't see the VA space in a partially-valid state.

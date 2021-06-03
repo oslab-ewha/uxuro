@@ -598,10 +598,6 @@ static vm_fault_t uvm_vm_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
     uvm_va_space_up_read(va_space);
     uvm_record_unlock_mmap_sem_read(&vma->vm_mm->mmap_sem);
 
-    if (uvm_nvmgpu_has_to_reclaim_blocks(&va_space->nvmgpu_va_space))
-        uvm_nvmgpu_reduce_memory_consumption(va_space);
-
-
     if (status == NV_OK) {
         status = uvm_global_mask_check_ecc_error(&gpus_to_check_for_ecc);
         uvm_global_mask_release(&gpus_to_check_for_ecc);

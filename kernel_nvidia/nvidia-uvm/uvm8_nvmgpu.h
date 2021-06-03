@@ -46,6 +46,8 @@ void uvm_nvmgpu_set_page_dirty(struct page *page);
 
 struct page *assign_pagecache(uvm_va_block_t * block, uvm_page_index_t page_index);
 
+void stop_pagecache_reducer(uvm_va_space_t *va_space);
+
 /**
  * Is this va_range managed by nvmgpu driver?
  *

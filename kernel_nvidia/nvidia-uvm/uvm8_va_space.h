@@ -47,6 +47,8 @@
 typedef struct uvm_nvmgpu_va_space_t
 {
     bool is_initailized;
+    bool being_destroyed;
+
     // number of blocks to be trashed at a time
     unsigned long trash_nr_blocks; 
     // number of pages reserved for the system 
@@ -56,7 +58,7 @@ typedef struct uvm_nvmgpu_va_space_t
 
     // pending fd for dragon map
     int fd_pending;
-
+    struct task_struct *reducer;
     uvm_mutex_t lock;
 
     struct list_head lru_head;

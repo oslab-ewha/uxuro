@@ -1596,9 +1596,6 @@ fail:
         }
     }
 
-    if (uvm_nvmgpu_has_to_reclaim_blocks(&va_space->nvmgpu_va_space))
-        uvm_nvmgpu_reduce_memory_consumption(va_space);
-
     return status;
 }
 

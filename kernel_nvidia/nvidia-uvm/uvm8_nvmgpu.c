@@ -39,6 +39,35 @@
 
 static void *fsdata_array[PAGES_PER_UVM_VA_BLOCK];
 
+static int pagecache_reducer(void *ctx)
+{
+	uvm_va_space_t *va_space = (uvm_va_space_t *)ctx;
+	uvm_nvmgpu_va_space_t *nvmgpu_va_space = &va_space->nvmgpu_va_space;
+	uvm_thread_context_wrapper_t	thread_context;
+
+	uvm_thread_context_add(&thread_context.context);
+
+	while (!nvmgpu_va_space->being_destroyed) {
+		if (uvm_nvmgpu_has_to_reclaim_blocks(nvmgpu_va_space))
+			uvm_nvmgpu_reduce_memory_consumption(va_space);
+		schedule_timeout_idle(10);
+	}
+
+	uvm_thread_context_remove(&thread_context.context);
+	return 0;
+}
+
+void
+stop_pagecache_reducer(uvm_va_space_t *va_space)
+{
+	uvm_nvmgpu_va_space_t *nvmgpu_va_space = &va_space->nvmgpu_va_space;
+	if (nvmgpu_va_space->reducer) {
+		nvmgpu_va_space->being_destroyed = true;
+		kthread_stop(nvmgpu_va_space->reducer);
+		nvmgpu_va_space->reducer = NULL;
+	}
+}
+
 /**
  * Initialize the NVMGPU module. This function has to be called once per
  * va_space. It must be called before calling
@@ -65,6 +94,7 @@ uvm_nvmgpu_initialize(uvm_va_space_t *va_space, unsigned long trash_nr_blocks, u
 	uvm_nvmgpu_va_space_t *nvmgpu_va_space = &va_space->nvmgpu_va_space;
 
 	if (!nvmgpu_va_space->is_initailized) {
+		nvmgpu_va_space->being_destroyed = false;
 		INIT_LIST_HEAD(&nvmgpu_va_space->lru_head);
 		/* TODO: Lower down the locking order.
 		 * Because invalid locking order warnings are generated when debug mode is enabled.
@@ -74,7 +104,8 @@ uvm_nvmgpu_initialize(uvm_va_space_t *va_space, unsigned long trash_nr_blocks, u
 		nvmgpu_va_space->trash_reserved_nr_pages = trash_reserved_nr_pages;
 		nvmgpu_va_space->flags = flags;
 		nvmgpu_va_space->is_initailized = true;
-	
+
+		nvmgpu_va_space->reducer = kthread_run(pagecache_reducer, va_space, "reducer");
 		return NV_OK;
 	}
 	else
@@ -830,6 +861,11 @@ uvm_nvmgpu_release_block(uvm_va_block_t *va_block)
 
 	UVM_ASSERT(va_block != NULL);
 
+	if (va_range == NULL) {
+		/* maybe already destroyed ?? */
+		return NV_OK;
+	}
+
 	// Remove the block from the list.
 	index = uvm_va_range_block_index(va_range, va_block->start);
 	old = (uvm_va_block_t *)nv_atomic_long_cmpxchg(&va_range->blocks[index], (long)va_block, (long)NULL);
@@ -1014,30 +1050,32 @@ uvm_nvmgpu_reduce_memory_consumption(uvm_va_space_t *va_space)
 	unsigned long	counter = 0;
 
 	uvm_va_block_t	*va_block;
+	struct list_head *lp, *next;
 
 	uvm_va_space_down_write(va_space);
 	// Reclaim blocks based on least recent transfer.
 
-	while (!list_empty(&nvmgpu_va_space->lru_head) && counter < nvmgpu_va_space->trash_nr_blocks) {
-		va_block = list_first_entry(&nvmgpu_va_space->lru_head, uvm_va_block_t, nvmgpu_lru);
+	list_for_each_safe(lp, next, &nvmgpu_va_space->lru_head) {
+		if (counter >= nvmgpu_va_space->trash_nr_blocks)
+			break;
+		va_block = list_entry(lp, uvm_va_block_t, nvmgpu_lru);
 
 		// Terminate the loop since we cannot trash out blocks that have a copy on GPU
 		if (uvm_processor_mask_get_gpu_count(&(va_block->resident)) > 0) {
-			printk(KERN_DEBUG "Encounter a block whose data are in GPU!!!\n");
-			break;
+			//printk(KERN_DEBUG "Encounter a block whose data are in GPU!!!\n");
+			continue;
 		}
-
 		// Evict the block if it is on CPU only and this `va_range` has the write flag.
 		if (uvm_processor_mask_get_count(&(va_block->resident)) > 0 && va_block->va_range->node.nvmgpu_rtn.flags & UVM_NVMGPU_FLAG_WRITE) {
 			status = uvm_nvmgpu_flush_host_block(va_block->va_range->va_space, va_block->va_range, va_block, true, NULL);
 			if (status != NV_OK) {
 				printk(KERN_DEBUG "Cannot evict block\n");
-				break;
+				continue;
 			}
 		}
-
 		// Remove this block from the list and release it.
-		list_del(nvmgpu_va_space->lru_head.next);
+		list_del_init(&va_block->nvmgpu_lru);
+
 		uvm_nvmgpu_release_block(va_block);
 		++counter;
 	}
