@@ -10,6 +10,7 @@
 #include <dirent.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/mman.h>
 #include <glib.h>
 
 #include <cuda.h>
@@ -26,8 +27,8 @@
 #define DRAGON_IOCTL_REMAP			1004
 
 #define MIN_SIZE			((size_t)1 << 21)
-#define DEFAULT_TRASH_NR_BLOCKS		16
-#define DEFAULT_TRASH_NR_RESERVED_PAGES	((unsigned long)1 << 21)
+#define DEFAULT_TRASH_NR_BLOCKS		32
+#define DEFAULT_TRASH_NR_RESERVED_PAGES	(((unsigned long)1 << 21) * 4)
 
 #define DRAGON_ENVNAME_ENABLE_READ_CACHE	"DRAGON_ENABLE_READ_CACHE"
 #define DRAGON_ENVNAME_ENABLE_LAZY_WRITE	"DRAGON_ENABLE_LAZY_WRITE"
@@ -419,6 +420,7 @@ dragon_unmap(void *addr)
 			fsync(request->backing_fd);
 	}
 
+	munmap(request->uvm_addr, request->size);
 	g_hash_table_remove(addr_map, addr);
 	free_request(request);
 
