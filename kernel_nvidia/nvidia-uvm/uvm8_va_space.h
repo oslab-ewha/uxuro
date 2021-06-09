@@ -47,7 +47,6 @@
 typedef struct uvm_nvmgpu_va_space_t
 {
     bool is_initailized;
-    bool being_destroyed;
 
     // number of blocks to be trashed at a time
     unsigned long trash_nr_blocks; 
@@ -60,6 +59,7 @@ typedef struct uvm_nvmgpu_va_space_t
     int fd_pending;
     struct task_struct *reducer;
     uvm_mutex_t lock;
+    uvm_mutex_t lock_blocks;
 
     struct list_head lru_head;
 } uvm_nvmgpu_va_space_t;

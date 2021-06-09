@@ -47,7 +47,7 @@ static int pagecache_reducer(void *ctx)
 
 	uvm_thread_context_add(&thread_context.context);
 
-	while (!nvmgpu_va_space->being_destroyed) {
+	while (!kthread_should_stop()) {
 		if (uvm_nvmgpu_has_to_reclaim_blocks(nvmgpu_va_space))
 			uvm_nvmgpu_reduce_memory_consumption(va_space);
 		schedule_timeout_idle(10);
@@ -62,7 +62,6 @@ stop_pagecache_reducer(uvm_va_space_t *va_space)
 {
 	uvm_nvmgpu_va_space_t *nvmgpu_va_space = &va_space->nvmgpu_va_space;
 	if (nvmgpu_va_space->reducer) {
-		nvmgpu_va_space->being_destroyed = true;
 		kthread_stop(nvmgpu_va_space->reducer);
 		nvmgpu_va_space->reducer = NULL;
 	}
@@ -94,12 +93,12 @@ uvm_nvmgpu_initialize(uvm_va_space_t *va_space, unsigned long trash_nr_blocks, u
 	uvm_nvmgpu_va_space_t *nvmgpu_va_space = &va_space->nvmgpu_va_space;
 
 	if (!nvmgpu_va_space->is_initailized) {
-		nvmgpu_va_space->being_destroyed = false;
 		INIT_LIST_HEAD(&nvmgpu_va_space->lru_head);
 		/* TODO: Lower down the locking order.
 		 * Because invalid locking order warnings are generated when debug mode is enabled.
 		 */
 		uvm_mutex_init(&nvmgpu_va_space->lock, UVM_LOCK_ORDER_VA_SPACE);
+		uvm_mutex_init(&nvmgpu_va_space->lock_blocks, UVM_LOCK_ORDER_VA_SPACE_NVMGPU);
 		nvmgpu_va_space->trash_nr_blocks = trash_nr_blocks;
 		nvmgpu_va_space->trash_reserved_nr_pages = trash_reserved_nr_pages;
 		nvmgpu_va_space->flags = flags;
@@ -1073,8 +1072,11 @@ uvm_nvmgpu_reduce_memory_consumption(uvm_va_space_t *va_space)
 				continue;
 			}
 		}
+
+		uvm_mutex_lock(&nvmgpu_va_space->lock_blocks);
 		// Remove this block from the list and release it.
 		list_del_init(&va_block->nvmgpu_lru);
+		uvm_mutex_unlock(&nvmgpu_va_space->lock_blocks);
 
 		uvm_nvmgpu_release_block(va_block);
 		++counter;

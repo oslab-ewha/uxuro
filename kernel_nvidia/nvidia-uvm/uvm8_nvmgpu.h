@@ -193,9 +193,10 @@ uvm_nvmgpu_block_mark_recent_in_buffer(uvm_va_block_t *va_block)
 
 	// Move this block to the tail of the LRU list.
 	// mutex locking is commented out. It has been already held.
-//    uvm_mutex_lock(&nvmgpu_va_space->lock);
-	list_move_tail(&va_block->nvmgpu_lru, &nvmgpu_va_space->lru_head);
-//    uvm_mutex_unlock(&nvmgpu_va_space->lock);
+        uvm_mutex_lock(&nvmgpu_va_space->lock_blocks);
+	if (!list_empty(&va_block->nvmgpu_lru))
+		list_move_tail(&va_block->nvmgpu_lru, &nvmgpu_va_space->lru_head);
+        uvm_mutex_unlock(&nvmgpu_va_space->lock_blocks);
 }
 
 #endif

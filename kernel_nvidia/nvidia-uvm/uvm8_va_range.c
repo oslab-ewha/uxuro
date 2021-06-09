@@ -365,8 +365,10 @@ static void uvm_va_range_destroy_managed(uvm_va_range_t *va_range)
 
     if (va_range->blocks) {
         // Unmap and drop our ref count on each block
-        for_each_va_block_in_va_range_safe(va_range, block, block_tmp)
+        for_each_va_block_in_va_range_safe(va_range, block, block_tmp) {
+            list_del_init(&block->nvmgpu_lru);
             uvm_va_block_kill(block);
+        }
 
         uvm_kvfree(va_range->blocks);
     }
@@ -1151,8 +1153,15 @@ NV_STATUS uvm_va_range_block_create(uvm_va_range_t *va_range, size_t index, uvm_
             uvm_va_block_release(block);
             block = old;
         }
-        else
+        else {
+            uvm_nvmgpu_va_space_t *nvmgpu_va_space = &va_range->va_space->nvmgpu_va_space;
             INIT_LIST_HEAD(&block->nvmgpu_lru);
+	    if (va_range->node.nvmgpu_rtn.has_data_bitmaps) {
+                uvm_mutex_lock(&nvmgpu_va_space->lock_blocks);
+                list_move_tail(&block->nvmgpu_lru, &nvmgpu_va_space->lru_head);
+                uvm_mutex_unlock(&nvmgpu_va_space->lock_blocks);
+            }
+	}
     }
 
     *out_block = block;
