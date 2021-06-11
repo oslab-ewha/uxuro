@@ -334,6 +334,14 @@ dragon_map(const char *filename, size_t size, unsigned short flags, void **paddr
 		return D_ERR_FILE;
 	}
 
+	error = cudaMallocManaged(&request->uvm_addr, size, cudaMemAttachGlobal);
+	if (error != cudaSuccess) {
+		fprintf(stderr, "failed to cudaMallocManaged: %s %s\n", cudaGetErrorName(error), cudaGetErrorString(error));
+		close(f_fd);
+		free(request);
+		return D_ERR_UVM;
+	}
+
 	request->backing_fd = f_fd;
 	request->size = size;
 	request->flags = flags;
@@ -420,7 +428,7 @@ dragon_unmap(void *addr)
 			fsync(request->backing_fd);
 	}
 
-	munmap(request->uvm_addr, request->size);
+	cudaFree(request->uvm_addr);
 	g_hash_table_remove(addr_map, addr);
 	free_request(request);
 

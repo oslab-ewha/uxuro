@@ -2852,17 +2852,10 @@ NV_STATUS uvm_api_nvmgpu_initialize(UVM_NVMGPU_INITIALIZE_PARAMS *params, struct
 NV_STATUS uvm_api_nvmgpu_register_file_va_space(UVM_NVMGPU_REGISTER_FILE_VA_SPACE_PARAMS *params, struct file *filp)
 {
     uvm_va_space_t *va_space = uvm_va_space_get(filp);
-    unsigned long	addr;
 
     /* TODO: need check private data of dragon file */
 
     va_space->nvmgpu_va_space.fd_pending = params->backing_fd;
-    addr = vm_mmap(filp, 0, PAGE_ALIGN(params->size), PROT_READ|PROT_WRITE, MAP_SHARED, 0);
-    if (IS_ERR_VALUE(addr)) {
-	    UVM_ERR_PRINT("failed register: mmap: err:%d\n", (int)addr);
-	    return NV_ERR_GENERIC;
-    }
-    params->uvm_addr = (void *)addr;
     return uvm_nvmgpu_register_file_va_space(va_space, params);
 }
 
