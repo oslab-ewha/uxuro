@@ -106,14 +106,16 @@ setup_fd_uvm(void)
 		return D_ERR_FILE;
 
 	while ((ent = readdir(dir)) != NULL) {
-		char	psf_path[512];
-		char	*psf_realpath;
+		char	*psf_path, *psf_realpath;
 
 		if (ent->d_type != DT_LNK)
 			continue;
 
-		sprintf(psf_path, "%s/%s", PSF_DIR, ent->d_name);
+		asprintf(&psf_path, "%s/%s", PSF_DIR, ent->d_name);
 		psf_realpath = realpath(psf_path, NULL);
+		free(psf_path);
+		if (psf_realpath == NULL)
+			continue;
 		if (strcmp(psf_realpath, NVIDIA_UVM_PATH) == 0)
 			fd_uvm = atoi(ent->d_name);
 		free(psf_realpath);
