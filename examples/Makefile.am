@@ -1,1 +1,1 @@
-SUBDIRS = common backprop BlackScholes
+SUBDIRS = common backprop BlackScholes hotspot

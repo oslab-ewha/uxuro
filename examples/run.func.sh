@@ -32,6 +32,9 @@ setup_runtime_by_code() {
 	bp)
 	    cmd=./backprop
 	    ;;
+	hs)
+	    cmd=./hotspot
+	    ;;
 	*)
 	    echo "unsupported code: $benchcode"
 	    exit 2
