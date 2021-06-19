@@ -43,6 +43,7 @@ AC_CONFIG_FILES([Makefile
 		 examples/backprop/Makefile
 		 examples/BlackScholes/Makefile
 		 examples/hotspot/Makefile
+		 examples/lavaMD/Makefile
 		 tests/sanity-basic/Makefile
 		 ])
 

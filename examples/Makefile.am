@@ -1,1 +1,1 @@
-SUBDIRS = common backprop BlackScholes hotspot
+SUBDIRS = common backprop BlackScholes hotspot lavaMD
