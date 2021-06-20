@@ -35,6 +35,12 @@ setup_runtime_by_code() {
 	hs)
 	    cmd=./hotspot
 	    ;;
+	lm)
+	    cmd=./lavaMD
+	    ;;
+	va)
+	    cmd=./vectorAdd
+	    ;;
 	*)
 	    echo "unsupported code: $benchcode"
 	    exit 2

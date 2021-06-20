@@ -5575,7 +5575,7 @@ fi
 done
 
 
-ac_config_files="$ac_config_files Makefile library/src/Makefile examples/Makefile examples/common/Makefile examples/backprop/Makefile examples/BlackScholes/Makefile examples/hotspot/Makefile examples/lavaMD/Makefile tests/sanity-basic/Makefile"
+ac_config_files="$ac_config_files Makefile library/src/Makefile examples/Makefile examples/common/Makefile examples/backprop/Makefile examples/BlackScholes/Makefile examples/hotspot/Makefile examples/lavaMD/Makefile examples/vectorAdd/Makefile tests/sanity-basic/Makefile"
 
 
 cat >confcache <<\_ACEOF
@@ -6333,6 +6333,7 @@ do
     "examples/BlackScholes/Makefile") CONFIG_FILES="$CONFIG_FILES examples/BlackScholes/Makefile" ;;
     "examples/hotspot/Makefile") CONFIG_FILES="$CONFIG_FILES examples/hotspot/Makefile" ;;
     "examples/lavaMD/Makefile") CONFIG_FILES="$CONFIG_FILES examples/lavaMD/Makefile" ;;
+    "examples/vectorAdd/Makefile") CONFIG_FILES="$CONFIG_FILES examples/vectorAdd/Makefile" ;;
     "tests/sanity-basic/Makefile") CONFIG_FILES="$CONFIG_FILES tests/sanity-basic/Makefile" ;;
 
   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5;;

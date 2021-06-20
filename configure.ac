@@ -44,6 +44,7 @@ AC_CONFIG_FILES([Makefile
 		 examples/BlackScholes/Makefile
 		 examples/hotspot/Makefile
 		 examples/lavaMD/Makefile
+		 examples/vectorAdd/Makefile
 		 tests/sanity-basic/Makefile
 		 ])
 
