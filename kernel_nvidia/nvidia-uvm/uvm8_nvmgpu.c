@@ -139,10 +139,13 @@ uvm_nvmgpu_register_file_va_space(uvm_va_space_t *va_space, UVM_NVMGPU_REGISTER_
 		return NV_ERR_INVALID_OPERATION;
 	}
 
-	// Find uvm node associated with the specified UVM address. Might fail if
-	// the library does not call cudaMallocaManaged before calling this
-	// function.
-	if (!node || node->start != expected_start_addr) {
+	// Find uvm node associated with the specified UVM address range.
+	if (node == NULL) {
+		printk(KERN_DEBUG "Error: no matching va range for 0x%llx-0x%llx\n", expected_start_addr, expected_end_addr);
+		return NV_ERR_OPERATING_SYSTEM;
+	}
+	// It would be OK if a va range includes the UVM address range.
+	if (node->end < expected_end_addr) {
 		printk(KERN_DEBUG "Cannot find uvm range 0x%llx - 0x%llx\n", expected_start_addr, expected_end_addr);
 		if (node)
 			printk(KERN_DEBUG "Closet uvm range 0x%llx - 0x%llx\n", node->start, node->end);

@@ -296,6 +296,8 @@ free_request(dragon_ioctl_map_t *request)
 	free(request);
 }
 
+#define ALIGN_UP(addr, size)	(((addr)+((size)-1))&(~((typeof(addr))(size)-1)))
+
 dragonError_t
 dragon_map(const char *filename, size_t size, unsigned short flags, void **paddr)
 {
@@ -336,7 +338,7 @@ dragon_map(const char *filename, size_t size, unsigned short flags, void **paddr
 		return D_ERR_FILE;
 	}
 
-	error = cudaMallocManaged(&request->uvm_addr, size, cudaMemAttachGlobal);
+	error = cudaMallocManaged(&request->uvm_addr, ALIGN_UP(size, 0x1000), cudaMemAttachGlobal);
 	if (error != cudaSuccess) {
 		fprintf(stderr, "failed to cudaMallocManaged: %s %s\n", cudaGetErrorName(error), cudaGetErrorString(error));
 		close(f_fd);
