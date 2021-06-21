@@ -62,6 +62,12 @@ cuio_init(cuio_type_t _type, const char *folder)
 	check_folder();
 }
 
+cuio_type_t
+cuio_get_type(void)
+{
+	return type;
+}
+
 cuio_ptr_t
 cuio_alloc_mem(size_t len)
 {
@@ -136,7 +142,7 @@ cuio_memset_d(cuio_ptr_t *pptr, int val)
 }
 
 static void
-read_file(const char *fpath, size_t len, cuio_ptr_t ptr)
+read_file(const char *fpath, off_t offset, size_t len, cuio_ptr_t ptr)
 {
 	FILE	*fp;
 
@@ -144,6 +150,8 @@ read_file(const char *fpath, size_t len, cuio_ptr_t ptr)
 		fprintf(stderr, "Cannot open file: %s\n", fpath);
 		exit(EXIT_FAILURE);
 	}
+	if (offset > 0)
+		fseek(fp, offset, SEEK_SET);
 	if (fread(ptr.ptr_h, len, 1, fp) != 1) {
 		fprintf(stderr, "Cannot read: %s\n", fpath);
 		exit(EXIT_FAILURE);
@@ -152,18 +160,18 @@ read_file(const char *fpath, size_t len, cuio_ptr_t ptr)
 }
 
 static cuio_ptr_t
-load_by_read(const char *fpath, size_t len, cuio_mode_t mode)
+load_by_read(const char *fpath, off_t offset, size_t len, cuio_mode_t mode)
 {
 	cuio_ptr_t	ptr;
 
 	ptr = cuio_alloc_mem(len);
 	if (mode != CUIO_MODE_WRITEONLY)
-		read_file(fpath, len, ptr);
+		read_file(fpath, offset, len, ptr);
 	return ptr;
 }
 
 static void
-unload_by_write(const char *fpath, cuio_ptr_t *pptr)
+unload_by_write(const char *fpath, off_t offset, cuio_ptr_t *pptr)
 {
 	FILE	*fp;
 	const char	*wr_mode;
@@ -173,6 +181,8 @@ unload_by_write(const char *fpath, cuio_ptr_t *pptr)
 		fprintf(stderr, "Cannot open: %s\n", fpath);
 		exit(EXIT_FAILURE);
 	}
+	if (offset > 0)
+		fseek(fp, offset, SEEK_SET);
 	if (fwrite(pptr->ptr_h, pptr->size, 1, fp) != 1) {
 		fprintf(stderr, "Cannot write: %s\n", fpath);
 		exit(EXIT_FAILURE);
@@ -222,7 +232,7 @@ munmap_by_dragon(const char *fpath, cuio_ptr_t *pptr)
 }
 
 static cuio_ptr_t
-mmap_by_hostreg(const char *fpath, size_t len, cuio_mode_t mode)
+mmap_by_hostreg(const char *fpath, off_t offset, size_t len, cuio_mode_t mode)
 {
 	cuio_ptr_t	ptr;
 	int	fd;
@@ -231,7 +241,7 @@ mmap_by_hostreg(const char *fpath, size_t len, cuio_mode_t mode)
 		fprintf(stderr, "Cannot open file: %s\n", fpath);
 		exit(EXIT_FAILURE);
 	}
-	ptr.ptr_h = mmap(NULL, len, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_NORESERVE, fd, 0);
+	ptr.ptr_h = mmap(NULL, len, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_NORESERVE, fd, offset);
 	close(fd);
 
 	if (ptr.ptr_h == MAP_FAILED) {
@@ -294,27 +304,27 @@ cuio_save_conf(cuio_confer_t confer, void *ctx)
 }
 
 cuio_ptr_t
-cuio_load_floats(const char *fname, size_t count, cuio_mode_t mode)
+cuio_load(const char *fname, off_t offset, size_t size, cuio_mode_t mode)
 {
 	char	fpath[256];
 	float	*data;
-	size_t	len = count * sizeof(float);
 	int	flags = 0;
 
 	snprintf(fpath, 256, "%s/%s", folder_base, fname);
 
 	switch (type) {
 	case CUIO_TYPE_DRAGON:
-		return mmap_by_dragon(fpath, len, mode);
+		/* offset not supported yet */
+		return mmap_by_dragon(fpath, size, mode);
 	case CUIO_TYPE_HOSTREG:
-		return mmap_by_hostreg(fpath, len, mode);
+		return mmap_by_hostreg(fpath, offset, size, mode);
 	default:
-		return load_by_read(fpath, len, mode);
+		return load_by_read(fpath, offset, size, mode);
 	}
 }
 
 void
-cuio_unload_floats(const char *fname, cuio_ptr_t *pptr)
+cuio_unload(const char *fname, off_t offset, cuio_ptr_t *pptr)
 {
 	char	fpath[256];
 
@@ -328,7 +338,19 @@ cuio_unload_floats(const char *fname, cuio_ptr_t *pptr)
 		munmap_by_hostreg(fname, pptr);
 		break;
 	default:
-		unload_by_write(fpath, pptr);
+		unload_by_write(fpath, offset, pptr);
 		break;
 	}
+}
+
+cuio_ptr_t
+cuio_load_floats(const char *fname, size_t count, cuio_mode_t mode)
+{
+	return cuio_load(fname, 0, count * sizeof(float), mode);
+}
+
+void
+cuio_unload_floats(const char *fname, cuio_ptr_t *pptr)
+{
+	cuio_unload(fname, 0, pptr);
 }

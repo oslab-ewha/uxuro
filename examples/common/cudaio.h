@@ -36,6 +36,7 @@ typedef struct {
 typedef void (*cuio_confer_t)(FILE *fp, const char *fpath, void *ctx);
 
 void cuio_init(cuio_type_t type, const char *folder);
+cuio_type_t cuio_get_type(void);
 
 cuio_ptr_t cuio_alloc_mem(size_t len);
 void cuio_free_mem(cuio_ptr_t *pptr);
@@ -46,6 +47,8 @@ void cuio_memset_d(cuio_ptr_t *pptr, int val);
 void cuio_load_conf(cuio_confer_t func, void *ctx);
 void cuio_save_conf(cuio_confer_t func, void *ctx);
 
+cuio_ptr_t cuio_load(const char *fname, off_t offset, size_t size, cuio_mode_t mode);
+void cuio_unload(const char *fname, off_t offset, cuio_ptr_t *pptr);
 cuio_ptr_t cuio_load_floats(const char *fname, size_t count, cuio_mode_t mode);
 void cuio_unload_floats(const char *fname, cuio_ptr_t *pptr);
 
