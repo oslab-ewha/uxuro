@@ -966,6 +966,15 @@ uvm_nvmgpu_write_begin(uvm_va_block_t *va_block, bool is_flush)
 
 			status = uvm_gpu_map_cpu_pages(gpu, page, PAGE_SIZE, &gpu_state->cpu_pages_dma_addrs[page_id]);
 			UVM_ASSERT(status == NV_OK);
+
+			uvm_pmm_sysmem_mappings_remove_gpu_mapping_on_eviction(&gpu->pmm_sysmem_mappings, gpu_state->cpu_pages_dma_addrs[page_id]);
+			status = uvm_pmm_sysmem_mappings_add_gpu_mapping(&gpu->pmm_sysmem_mappings,
+									 gpu_state->cpu_pages_dma_addrs[page_id],
+									 uvm_va_block_cpu_page_address(va_block, page_id),
+									 PAGE_SIZE,
+									 va_block,
+									 UVM_ID_CPU);
+			UVM_ASSERT(status == NV_OK);
 		}
 
 		if (va_block->cpu.pages[page_id] != page) {
