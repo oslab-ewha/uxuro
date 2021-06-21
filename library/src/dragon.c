@@ -111,7 +111,10 @@ setup_fd_uvm(void)
 		if (ent->d_type != DT_LNK)
 			continue;
 
-		asprintf(&psf_path, "%s/%s", PSF_DIR, ent->d_name);
+		if (asprintf(&psf_path, "%s/%s", PSF_DIR, ent->d_name) < 0) {
+			fprintf(stderr, "failed to build path: %s\n", ent->d_name);
+			continue;
+		}
 		psf_realpath = realpath(psf_path, NULL);
 		free(psf_path);
 		if (psf_realpath == NULL)
