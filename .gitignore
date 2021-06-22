@@ -24,6 +24,7 @@ Makefile
 /examples/Makefile
 /examples/BlackScholes/BlackScholes
 /examples/backprop/backprop
+/examples/binomialOptions/binomialOptions
 /examples/hotspot/hotspot
 /examples/lavaMD/lavaMD
 /examples/pathfinder/pathfinder

@@ -5575,7 +5575,7 @@ fi
 done
 
 
-ac_config_files="$ac_config_files Makefile library/src/Makefile examples/Makefile examples/common/Makefile examples/BlackScholes/Makefile examples/backprop/Makefile examples/hotspot/Makefile examples/lavaMD/Makefile examples/pathfinder/Makefile examples/vectorAdd/Makefile tests/sanity-basic/Makefile"
+ac_config_files="$ac_config_files Makefile library/src/Makefile examples/Makefile examples/common/Makefile examples/BlackScholes/Makefile examples/backprop/Makefile examples/binomialOptions/Makefile examples/hotspot/Makefile examples/lavaMD/Makefile examples/pathfinder/Makefile examples/vectorAdd/Makefile tests/sanity-basic/Makefile"
 
 
 cat >confcache <<\_ACEOF
@@ -6331,6 +6331,7 @@ do
     "examples/common/Makefile") CONFIG_FILES="$CONFIG_FILES examples/common/Makefile" ;;
     "examples/BlackScholes/Makefile") CONFIG_FILES="$CONFIG_FILES examples/BlackScholes/Makefile" ;;
     "examples/backprop/Makefile") CONFIG_FILES="$CONFIG_FILES examples/backprop/Makefile" ;;
+    "examples/binomialOptions/Makefile") CONFIG_FILES="$CONFIG_FILES examples/binomialOptions/Makefile" ;;
     "examples/hotspot/Makefile") CONFIG_FILES="$CONFIG_FILES examples/hotspot/Makefile" ;;
     "examples/lavaMD/Makefile") CONFIG_FILES="$CONFIG_FILES examples/lavaMD/Makefile" ;;
     "examples/pathfinder/Makefile") CONFIG_FILES="$CONFIG_FILES examples/pathfinder/Makefile" ;;

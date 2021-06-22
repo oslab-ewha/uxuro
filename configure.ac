@@ -42,6 +42,7 @@ AC_CONFIG_FILES([Makefile
                  examples/common/Makefile
 		 examples/BlackScholes/Makefile
 		 examples/backprop/Makefile
+		 examples/binomialOptions/Makefile
 		 examples/hotspot/Makefile
 		 examples/lavaMD/Makefile
 		 examples/pathfinder/Makefile
