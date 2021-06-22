@@ -1,1 +1,1 @@
-SUBDIRS = common backprop BlackScholes hotspot lavaMD vectorAdd
+SUBDIRS = common backprop BlackScholes hotspot lavaMD pathfinder vectorAdd

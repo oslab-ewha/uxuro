@@ -41,6 +41,9 @@ setup_runtime_by_code() {
 	va)
 	    cmd=./vectorAdd
 	    ;;
+	pf)
+	    cmd=./pathfinder
+	    ;;
 	*)
 	    echo "unsupported code: $benchcode"
 	    exit 2

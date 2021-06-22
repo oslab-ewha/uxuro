@@ -40,10 +40,11 @@ AC_CONFIG_FILES([Makefile
                  library/src/Makefile
                  examples/Makefile
                  examples/common/Makefile
-		 examples/backprop/Makefile
 		 examples/BlackScholes/Makefile
+		 examples/backprop/Makefile
 		 examples/hotspot/Makefile
 		 examples/lavaMD/Makefile
+		 examples/pathfinder/Makefile
 		 examples/vectorAdd/Makefile
 		 tests/sanity-basic/Makefile
 		 ])

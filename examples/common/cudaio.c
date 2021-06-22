@@ -344,6 +344,18 @@ cuio_unload(const char *fname, off_t offset, cuio_ptr_t *pptr)
 }
 
 cuio_ptr_t
+cuio_load_ints(const char *fname, size_t count, cuio_mode_t mode)
+{
+	return cuio_load(fname, 0, count * sizeof(int), mode);
+}
+
+void
+cuio_unload_ints(const char *fname, cuio_ptr_t *pptr)
+{
+	cuio_unload(fname, 0, pptr);
+}
+
+cuio_ptr_t
 cuio_load_floats(const char *fname, size_t count, cuio_mode_t mode)
 {
 	return cuio_load(fname, 0, count * sizeof(float), mode);
