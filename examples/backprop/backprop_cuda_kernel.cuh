@@ -11,16 +11,16 @@ extern __shared__ float	shared_data[];
 __global__ void
 bpnn_layerforward_CUDA(float *input_cuda, float *input_hidden_cuda, float *hidden_partial_sum, long in, long hid)
 {
-	int by = blockIdx.x;
-	int tx = threadIdx.x;
-	int ty = threadIdx.y;
+	int	by = blockIdx.x;
+	int	tx = threadIdx.x;
+	int	ty = threadIdx.y;
 
 	float	*input_node = shared_data;
 	float	*weight_matrix = shared_data + blockDim.x;
 
-	int index = (hid + 1) * blockDim.y * by + (hid + 1) * ty + tx + 1 + (hid + 1);  
+	long	index = (hid + 1) * blockDim.y * by + (hid + 1) * ty + tx + 1 + (hid + 1);
 
-	int index_in = blockDim.y * by + ty + 1;
+	int	index_in = blockDim.y * by + ty + 1;
    
 	if (tx == 0)
 		input_node[ty] = input_cuda[index_in];
