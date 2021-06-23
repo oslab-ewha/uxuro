@@ -28,6 +28,7 @@ Makefile
 /examples/hotspot/hotspot
 /examples/lavaMD/lavaMD
 /examples/pathfinder/pathfinder
+/examples/srad_v2/srad
 /examples/vectorAdd/vectorAdd
 /examples/common/Makefile
 /examples/common/libutil.a

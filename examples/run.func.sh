@@ -44,6 +44,12 @@ setup_runtime_by_code() {
 	pf)
 	    cmd=./pathfinder
 	    ;;
+	bo)
+	    cmd=./binomialOptions
+	    ;;
+	sr)
+	    cmd=./srad
+	    ;;
 	*)
 	    echo "unsupported code: $benchcode"
 	    exit 2

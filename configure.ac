@@ -46,6 +46,7 @@ AC_CONFIG_FILES([Makefile
 		 examples/hotspot/Makefile
 		 examples/lavaMD/Makefile
 		 examples/pathfinder/Makefile
+		 examples/srad_v2/Makefile
 		 examples/vectorAdd/Makefile
 		 tests/sanity-basic/Makefile
 		 ])
