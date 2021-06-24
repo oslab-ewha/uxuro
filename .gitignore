@@ -33,7 +33,7 @@ Makefile
 /examples/common/Makefile
 /examples/common/libutil.a
 /library/src/Makefile
-/library/src/libdragon.a
+/library/src/libuxu.a
 /kernel_nvidia/.cache.mk
 /kernel_nvidia/.tmp_versions/
 /kernel_nvidia/Module.symvers

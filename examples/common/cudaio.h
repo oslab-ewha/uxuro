@@ -16,8 +16,8 @@ typedef enum {
 	CUIO_TYPE_GENERATOR,
 	CUIO_TYPE_HOST,
 	CUIO_TYPE_UVM,
-	CUIO_TYPE_HOSTREG,
-	CUIO_TYPE_DRAGON
+	CUIO_TYPE_HREG,
+	CUIO_TYPE_UXU
 } cuio_type_t;
 
 typedef enum {

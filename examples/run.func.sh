@@ -61,13 +61,13 @@ setup_run_schemes() {
     if [[ $schemes = "all" ]]; then
 	case $memscope in
 	    fm)
-		run_schemes="NVMGPU"
+		run_schemes="UXU"
 		;;
 	    hm)
-		run_schemes="UVM NVMGPU HOSTREG"
+		run_schemes="UVM UXU HREG"
 		;;
 	    gm)
-		run_schemes="UVM NVMGPU HOSTREG HOST"
+		run_schemes="UVM UXU HREG HOST"
 		;;
 	esac
     else

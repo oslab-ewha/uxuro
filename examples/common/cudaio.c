@@ -12,7 +12,7 @@
 #include <cuda.h>
 
 #include "cuhelper.h"
-#include "dragon.h"
+#include "libuxu.h"
 #include "cudaio.h"
 
 static const char	*folder_base;
@@ -49,12 +49,12 @@ cuio_init(cuio_type_t _type, const char *folder)
 
 		if (typestr == NULL)
 			type = CUIO_TYPE_HOST;
-		else if (strcmp(typestr, "NVMGPU") == 0)
-			type = CUIO_TYPE_DRAGON;
+		else if (strcmp(typestr, "UXU") == 0)
+			type = CUIO_TYPE_UXU;
 		else if (strcmp(typestr, "UVM") == 0)
 			type = CUIO_TYPE_UVM;
-		else if (strcmp(typestr, "HOSTREG") == 0)
-			type = CUIO_TYPE_HOSTREG;
+		else if (strcmp(typestr, "HREG") == 0)
+			type = CUIO_TYPE_HREG;
 		else
 			type = CUIO_TYPE_HOST;
 	}
@@ -94,16 +94,16 @@ cuio_alloc_mem(size_t len)
 	return ptr;
 }
 
-static void munmap_by_dragon(const char *fpath, cuio_ptr_t *pptr);
+static void munmap_by_uxu(const char *fpath, cuio_ptr_t *pptr);
 static void munmap_by_hostreg(const char *fpath, cuio_ptr_t *pptr);
 
 void
 cuio_free_mem(cuio_ptr_t *pptr)
 {
-	if (pptr->type == CUIO_TYPE_DRAGON || pptr->type == CUIO_TYPE_HOSTREG) {
+	if (pptr->type == CUIO_TYPE_UXU || pptr->type == CUIO_TYPE_HREG) {
 		if (pptr->mapped) {
-			if (pptr->type == CUIO_TYPE_DRAGON) {
-				munmap_by_dragon("", pptr);
+			if (pptr->type == CUIO_TYPE_UXU) {
+				munmap_by_uxu("", pptr);
 			}
 			else {
 				munmap_by_hostreg("", pptr);
@@ -195,7 +195,7 @@ unload_by_write(const char *fpath, off_t offset, cuio_ptr_t *pptr)
 }
 
 static cuio_ptr_t
-mmap_by_dragon(const char *fpath, size_t len, cuio_mode_t mode)
+mmap_by_uxu(const char *fpath, size_t len, cuio_mode_t mode)
 {
 	cuio_ptr_t	ptr;
 	int	flags = D_F_READ;
@@ -211,22 +211,22 @@ mmap_by_dragon(const char *fpath, size_t len, cuio_mode_t mode)
 		flags |= (D_F_WRITE | D_F_CREATE | D_F_VOLATILE);
 		break;
 	}
-	if (dragon_map(fpath, len, flags, (void **)&ptr.ptr_h) != D_OK) {
-		fprintf(stderr, "Cannot dragon_map %s\n", fpath);
+	if (uxu_map(fpath, len, flags, (void **)&ptr.ptr_h) != D_OK) {
+		fprintf(stderr, "Cannot uxu_map %s\n", fpath);
 		exit(EXIT_FAILURE);
 	}
 	ptr.ptr_d = ptr.ptr_h;
 	ptr.size = len;
-	ptr.type = CUIO_TYPE_DRAGON;
+	ptr.type = CUIO_TYPE_UXU;
 	ptr.mapped = 1;
 	return ptr;
 }
 
 static void
-munmap_by_dragon(const char *fpath, cuio_ptr_t *pptr)
+munmap_by_uxu(const char *fpath, cuio_ptr_t *pptr)
 {
-	if (dragon_unmap(pptr->ptr_h) != D_OK) {
-		fprintf(stderr, "Cannot dragon_unmap: %s\n", fpath);
+	if (uxu_unmap(pptr->ptr_h) != D_OK) {
+		fprintf(stderr, "Cannot uxu_unmap: %s\n", fpath);
 		exit(EXIT_FAILURE);
 	}
 }
@@ -251,7 +251,7 @@ mmap_by_hostreg(const char *fpath, off_t offset, size_t len, cuio_mode_t mode)
 	CUDA_CALL_SAFE(cudaHostRegister(ptr.ptr_h, len, cudaHostRegisterDefault));
 	ptr.ptr_d = ptr.ptr_h;
 	ptr.size = len;
-	ptr.type = CUIO_TYPE_HOSTREG;
+	ptr.type = CUIO_TYPE_HREG;
 	ptr.mapped = 1;
 	return ptr;
 }
@@ -313,10 +313,10 @@ cuio_load(const char *fname, off_t offset, size_t size, cuio_mode_t mode)
 	snprintf(fpath, 256, "%s/%s", folder_base, fname);
 
 	switch (type) {
-	case CUIO_TYPE_DRAGON:
+	case CUIO_TYPE_UXU:
 		/* offset not supported yet */
-		return mmap_by_dragon(fpath, size, mode);
-	case CUIO_TYPE_HOSTREG:
+		return mmap_by_uxu(fpath, size, mode);
+	case CUIO_TYPE_HREG:
 		return mmap_by_hostreg(fpath, offset, size, mode);
 	default:
 		return load_by_read(fpath, offset, size, mode);
@@ -331,10 +331,10 @@ cuio_unload(const char *fname, off_t offset, cuio_ptr_t *pptr)
 	snprintf(fpath, 256, "%s/%s", folder_base, fname);
 
 	switch (pptr->type) {
-	case CUIO_TYPE_DRAGON:
-		munmap_by_dragon(fpath, pptr);
+	case CUIO_TYPE_UXU:
+		munmap_by_uxu(fpath, pptr);
 		break;
-	case CUIO_TYPE_HOSTREG:
+	case CUIO_TYPE_HREG:
 		munmap_by_hostreg(fname, pptr);
 		break;
 	default:

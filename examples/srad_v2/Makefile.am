@@ -8,7 +8,7 @@ srad_gen_SOURCES = srad_gen.c
 
 AM_CPPFLAGS = -I../common
 common_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/library/include -I../common
-common_LDADD = -lcuda -lcudart ../common/libutil.a ../common/libutil.a $(top_srcdir)/library/src/libdragon.a $(GLIB_LIBS)
+common_LDADD = -lcuda -lcudart ../common/libutil.a ../common/libutil.a $(top_srcdir)/library/src/libuxu.a $(GLIB_LIBS)
 
 srad_CFLAGS = $(common_CFLAGS) -DCUDAMEMCPY
 srad_LDADD = $(common_LDADD)

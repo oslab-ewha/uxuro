@@ -6,7 +6,7 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
-#include <dragon.h>
+#include "libuxu.h"
 
 #include "cuhelper.h"
 #include "timer.h"
@@ -54,7 +54,7 @@ main(int argc, char *argv[])
 	CUDA_CALL_SAFE(cudaEventCreate(&stop_event));
 
 	init_tickcount();
-	if (dragon_map(argv[1], total_size, D_F_READ, (void **)&g_buf) != D_OK)
+	if (uxu_map(argv[1], total_size, D_F_READ, (void **)&g_buf) != D_OK)
 		return EXIT_FAILURE;
 	map_time = get_tickcount();
 
@@ -68,7 +68,7 @@ main(int argc, char *argv[])
 	CUDA_CALL_SAFE(cudaDeviceSynchronize());
 	
 	init_tickcount();
-	if (dragon_unmap(g_buf) != D_OK)
+	if (uxu_unmap(g_buf) != D_OK)
 		return EXIT_FAILURE;
 	free_time = get_tickcount();
 

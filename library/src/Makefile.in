@@ -104,10 +104,10 @@ AM_V_AR = $(am__v_AR_@AM_V@)
 am__v_AR_ = $(am__v_AR_@AM_DEFAULT_V@)
 am__v_AR_0 = @echo "  AR      " $@;
 am__v_AR_1 = 
-libdragon_a_AR = $(AR) $(ARFLAGS)
-libdragon_a_LIBADD =
-am_libdragon_a_OBJECTS = libdragon_a-dragon.$(OBJEXT)
-libdragon_a_OBJECTS = $(am_libdragon_a_OBJECTS)
+libuxu_a_AR = $(AR) $(ARFLAGS)
+libuxu_a_LIBADD =
+am_libuxu_a_OBJECTS = libuxu_a-libuxu.$(OBJEXT)
+libuxu_a_OBJECTS = $(am_libuxu_a_OBJECTS)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -140,8 +140,8 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(libdragon_a_SOURCES)
-DIST_SOURCES = $(libdragon_a_SOURCES)
+SOURCES = $(libuxu_a_SOURCES)
+DIST_SOURCES = $(libuxu_a_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -276,9 +276,9 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 CLEANFILES = *~
 DISTCLEANFILES = *~
-noinst_LIBRARIES = libdragon.a
-libdragon_a_CFLAGS = $(GLIB_CFLAGS) $(CUDA_INC) -I../include
-libdragon_a_SOURCES = dragon.c
+noinst_LIBRARIES = libuxu.a
+libuxu_a_CFLAGS = $(GLIB_CFLAGS) $(CUDA_INC) -I../include
+libuxu_a_SOURCES = libuxu.c
 all: all-am
 
 .SUFFIXES:
@@ -317,10 +317,10 @@ $(am__aclocal_m4_deps):
 clean-noinstLIBRARIES:
 	-test -z "$(noinst_LIBRARIES)" || rm -f $(noinst_LIBRARIES)
 
-libdragon.a: $(libdragon_a_OBJECTS) $(libdragon_a_DEPENDENCIES) $(EXTRA_libdragon_a_DEPENDENCIES) 
-	$(AM_V_at)-rm -f libdragon.a
-	$(AM_V_AR)$(libdragon_a_AR) libdragon.a $(libdragon_a_OBJECTS) $(libdragon_a_LIBADD)
-	$(AM_V_at)$(RANLIB) libdragon.a
+libuxu.a: $(libuxu_a_OBJECTS) $(libuxu_a_DEPENDENCIES) $(EXTRA_libuxu_a_DEPENDENCIES) 
+	$(AM_V_at)-rm -f libuxu.a
+	$(AM_V_AR)$(libuxu_a_AR) libuxu.a $(libuxu_a_OBJECTS) $(libuxu_a_LIBADD)
+	$(AM_V_at)$(RANLIB) libuxu.a
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -328,7 +328,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdragon_a-dragon.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libuxu_a-libuxu.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -344,19 +344,19 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(COMPILE) -c -o $@ `$(CYGPATH_W) '$<'`
 
-libdragon_a-dragon.o: dragon.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libdragon_a_CFLAGS) $(CFLAGS) -MT libdragon_a-dragon.o -MD -MP -MF $(DEPDIR)/libdragon_a-dragon.Tpo -c -o libdragon_a-dragon.o `test -f 'dragon.c' || echo '$(srcdir)/'`dragon.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libdragon_a-dragon.Tpo $(DEPDIR)/libdragon_a-dragon.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='dragon.c' object='libdragon_a-dragon.o' libtool=no @AMDEPBACKSLASH@
+libuxu_a-libuxu.o: libuxu.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libuxu_a_CFLAGS) $(CFLAGS) -MT libuxu_a-libuxu.o -MD -MP -MF $(DEPDIR)/libuxu_a-libuxu.Tpo -c -o libuxu_a-libuxu.o `test -f 'libuxu.c' || echo '$(srcdir)/'`libuxu.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libuxu_a-libuxu.Tpo $(DEPDIR)/libuxu_a-libuxu.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libuxu.c' object='libuxu_a-libuxu.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libdragon_a_CFLAGS) $(CFLAGS) -c -o libdragon_a-dragon.o `test -f 'dragon.c' || echo '$(srcdir)/'`dragon.c
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libuxu_a_CFLAGS) $(CFLAGS) -c -o libuxu_a-libuxu.o `test -f 'libuxu.c' || echo '$(srcdir)/'`libuxu.c
 
-libdragon_a-dragon.obj: dragon.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libdragon_a_CFLAGS) $(CFLAGS) -MT libdragon_a-dragon.obj -MD -MP -MF $(DEPDIR)/libdragon_a-dragon.Tpo -c -o libdragon_a-dragon.obj `if test -f 'dragon.c'; then $(CYGPATH_W) 'dragon.c'; else $(CYGPATH_W) '$(srcdir)/dragon.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libdragon_a-dragon.Tpo $(DEPDIR)/libdragon_a-dragon.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='dragon.c' object='libdragon_a-dragon.obj' libtool=no @AMDEPBACKSLASH@
+libuxu_a-libuxu.obj: libuxu.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libuxu_a_CFLAGS) $(CFLAGS) -MT libuxu_a-libuxu.obj -MD -MP -MF $(DEPDIR)/libuxu_a-libuxu.Tpo -c -o libuxu_a-libuxu.obj `if test -f 'libuxu.c'; then $(CYGPATH_W) 'libuxu.c'; else $(CYGPATH_W) '$(srcdir)/libuxu.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libuxu_a-libuxu.Tpo $(DEPDIR)/libuxu_a-libuxu.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libuxu.c' object='libuxu_a-libuxu.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libdragon_a_CFLAGS) $(CFLAGS) -c -o libdragon_a-dragon.obj `if test -f 'dragon.c'; then $(CYGPATH_W) 'dragon.c'; else $(CYGPATH_W) '$(srcdir)/dragon.c'; fi`
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libuxu_a_CFLAGS) $(CFLAGS) -c -o libuxu_a-libuxu.obj `if test -f 'libuxu.c'; then $(CYGPATH_W) 'libuxu.c'; else $(CYGPATH_W) '$(srcdir)/libuxu.c'; fi`
 
 ID: $(am__tagged_files)
 	$(am__define_uniq_tagged_files); mkid -fID $$unique

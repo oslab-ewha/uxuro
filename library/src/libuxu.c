@@ -16,7 +16,7 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
-#include "dragon.h"
+#include "libuxu.h"
 
 #define PSF_DIR		"/proc/self/fd"
 #define NVIDIA_UVM_PATH	"/dev/nvidia-uvm"
@@ -47,7 +47,7 @@ static int	fd_uvm = -1;
 static int	initialized;
 
 static int	minsize = MIN_SIZE;
-static int	disabled_dragon = 0;
+static int	disabled_uxu = 0;
 
 static GHashTable	*addr_map;
 
@@ -56,7 +56,7 @@ typedef struct {
 	unsigned long trash_reserved_nr_pages;
 	unsigned short flags;
 	unsigned int status;
-} dragon_ioctl_init_t;
+} uxu_ioctl_init_t;
 
 typedef struct {
 	int backing_fd;
@@ -64,7 +64,7 @@ typedef struct {
 	size_t size;
 	unsigned short flags;
 	unsigned int status;
-} dragon_ioctl_map_t;
+} uxu_ioctl_map_t;
 
 static int
 open_uvm_dev(void)
@@ -78,7 +78,7 @@ open_uvm_dev(void)
 	return fd;
 }
 
-static dragonError_t
+static uxu_err_t
 try_to_init_uvm(void)
 {
 	void	*addr;
@@ -94,12 +94,12 @@ try_to_init_uvm(void)
 	return D_OK;
 }
 
-static dragonError_t
+static uxu_err_t
 setup_fd_uvm(void)
 {
 	DIR	*dir;
 	struct dirent	*ent;
-	dragonError_t	err = D_ERR_FILE;
+	uxu_err_t	err = D_ERR_FILE;
 
 	dir = opendir(PSF_DIR);
 	if (dir == NULL)
@@ -132,26 +132,26 @@ setup_fd_uvm(void)
 	return err;
 }
 
-static dragonError_t
+static uxu_err_t
 init_module(void)
 {
-	dragon_ioctl_init_t	request;
+	uxu_ioctl_init_t	request;
 	long	nr_pages;
 	char	*env_val;
 	char	*endptr;
 	int	status;
-	dragonError_t	err;
+	uxu_err_t	err;
 
 	addr_map = g_hash_table_new(NULL, NULL);
 
 	if (secure_getenv("NO_DRAGON")) {
-		disabled_dragon = 1;
+		disabled_uxu = 1;
 		initialized = 1;
 		return D_OK;
 	}
 
 	if ((err = try_to_init_uvm()) != D_OK) {
-		fprintf(stderr, "failed to initialize dragon: %d\n", err);
+		fprintf(stderr, "failed to initialize uxu: %d\n", err);
 		return D_ERR_UVM;
 	}
 
@@ -216,8 +216,8 @@ init_module(void)
 
 #define BUFSIZE	(1024 * 4)
 
-static dragonError_t
-fillup_from_file(dragon_ioctl_map_t *request)
+static uxu_err_t
+fillup_from_file(uxu_ioctl_map_t *request)
 {
 	size_t	size;
 	unsigned char	*addr;
@@ -245,7 +245,7 @@ fillup_from_file(dragon_ioctl_map_t *request)
 }
 
 static void
-flush_to_file(dragon_ioctl_map_t *request)
+flush_to_file(uxu_ioctl_map_t *request)
 {
 	size_t	size;
 	unsigned char	*addr;
@@ -271,11 +271,11 @@ flush_to_file(dragon_ioctl_map_t *request)
 	}
 }
 
-static dragonError_t
-do_dragon_map(dragon_ioctl_map_t *request)
+static uxu_err_t
+do_uxu_map(uxu_ioctl_map_t *request)
 {
 	int	status;
-	dragonError_t	err = D_OK;
+	uxu_err_t	err = D_OK;
 
 	if ((request->flags & D_F_READ) && !(request->flags & D_F_VOLATILE)) {
 		if ((status = posix_fadvise(request->backing_fd, 0, 0, fadvice)) != 0)
@@ -293,7 +293,7 @@ do_dragon_map(dragon_ioctl_map_t *request)
 }
 
 static void
-free_request(dragon_ioctl_map_t *request)
+free_request(uxu_ioctl_map_t *request)
 {
 	close(request->backing_fd);
 	free(request);
@@ -301,12 +301,12 @@ free_request(dragon_ioctl_map_t *request)
 
 #define ALIGN_UP(addr, size)	(((addr)+((size)-1))&(~((typeof(addr))(size)-1)))
 
-dragonError_t
-dragon_map(const char *filename, size_t size, unsigned short flags, void **paddr)
+uxu_err_t
+uxu_map(const char *filename, size_t size, unsigned short flags, void **paddr)
 {
 	int	f_flags = 0;
 	int	f_fd;
-	dragon_ioctl_map_t	*request;
+	uxu_ioctl_map_t	*request;
 	cudaError_t	error;
 	int		ret = D_OK;
 
@@ -316,8 +316,8 @@ dragon_map(const char *filename, size_t size, unsigned short flags, void **paddr
 			return ret;
 	}
 
-	if ((request = (dragon_ioctl_map_t *)calloc(1, sizeof(dragon_ioctl_map_t))) == NULL) {
-		fprintf(stderr, "Cannot calloc dragon_ioctl_map_t\n");
+	if ((request = (uxu_ioctl_map_t *)calloc(1, sizeof(uxu_ioctl_map_t))) == NULL) {
+		fprintf(stderr, "Cannot calloc uxu_ioctl_map_t\n");
 		return D_ERR_MEM;
 	}
 
@@ -353,10 +353,10 @@ dragon_map(const char *filename, size_t size, unsigned short flags, void **paddr
 	request->size = size;
 	request->flags = flags;
 
-	if (disabled_dragon)
+	if (disabled_uxu)
 		ret = fillup_from_file(request);
 	else
-		ret = do_dragon_map(request);
+		ret = do_uxu_map(request);
 
 	if (ret == D_OK) {
 		*paddr = request->uvm_addr;
@@ -368,16 +368,16 @@ dragon_map(const char *filename, size_t size, unsigned short flags, void **paddr
 	return ret;
 }
 
-dragonError_t
-dragon_remap(void *addr, unsigned short flags)
+uxu_err_t
+uxu_remap(void *addr, unsigned short flags)
 {
 	int	status;
-	dragon_ioctl_map_t	*request = g_hash_table_lookup(addr_map, addr);
+	uxu_ioctl_map_t	*request = g_hash_table_lookup(addr_map, addr);
 	int	fd;
-	dragonError_t	err = D_OK;
+	uxu_err_t	err = D_OK;
 
 	if (request == NULL) {
-		fprintf(stderr, "%p is not mapped via dragon_map\n", addr);
+		fprintf(stderr, "%p is not mapped via uxu_map\n", addr);
 		return D_ERR_INTVAL;
 	}
 
@@ -399,35 +399,35 @@ dragon_remap(void *addr, unsigned short flags)
 	return err;
 }
 
-dragonError_t
-dragon_trash_set_num_blocks(unsigned long nrblocks)
+uxu_err_t
+uxu_trash_set_num_blocks(unsigned long nrblocks)
 {
 	return D_ERR_NOT_IMPLEMENTED;
 }
 
-dragonError_t
-dragon_trash_set_num_reserved_sys_cache_pages(unsigned long nrpages)
+uxu_err_t
+uxu_trash_set_num_reserved_sys_cache_pages(unsigned long nrpages)
 {
 	return D_ERR_NOT_IMPLEMENTED;
 }
 
-dragonError_t
-dragon_flush(void *addr)
+uxu_err_t
+uxu_flush(void *addr)
 {
 	return D_ERR_NOT_IMPLEMENTED;
 }
 
-dragonError_t
-dragon_unmap(void *addr)
+uxu_err_t
+uxu_unmap(void *addr)
 {
-	dragon_ioctl_map_t	*request = g_hash_table_lookup(addr_map, addr);
+	uxu_ioctl_map_t	*request = g_hash_table_lookup(addr_map, addr);
 
 	if (request == NULL) {
-		fprintf(stderr, "%p is not mapped via dragon_map\n", addr);
+		fprintf(stderr, "%p is not mapped via uxu_map\n", addr);
 		return D_ERR_INTVAL;
 	}
 
-	if (disabled_dragon) {
+	if (disabled_uxu) {
 		flush_to_file(request);
 	}
 	else {

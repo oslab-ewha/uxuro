@@ -10,6 +10,6 @@ readtest_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
 writetest_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
 
 AM_CPPFLAGS = -I$(top_srcdir)/library/include -I../../examples/common
-LDADD = $(top_srcdir)/library/src/libdragon.a $(GLIB_LIBS) ../../examples/common/libutil.a
+LDADD = $(top_srcdir)/library/src/libuxu.a $(GLIB_LIBS) ../../examples/common/libutil.a
 
 include $(top_srcdir)/makefile.cu

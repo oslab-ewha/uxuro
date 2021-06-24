@@ -104,7 +104,7 @@ am_binomialOptions_OBJECTS = binomialOptions.$(OBJEXT)
 binomialOptions_OBJECTS = $(am_binomialOptions_OBJECTS)
 am__DEPENDENCIES_1 =
 am__DEPENDENCIES_2 = ../common/libutil.a ../common/libutil.a \
-	$(top_srcdir)/library/src/libdragon.a $(am__DEPENDENCIES_1)
+	$(top_srcdir)/library/src/libuxu.a $(am__DEPENDENCIES_1)
 binomialOptions_DEPENDENCIES = $(am__DEPENDENCIES_2)
 am_binomialOptions_gen_OBJECTS =  \
 	binomialOptions_gen-binomialOptions_gen.$(OBJEXT)
@@ -283,7 +283,7 @@ binomialOptions_SOURCES = binomialOptions.cu
 binomialOptions_gen_SOURCES = binomialOptions_gen.c
 AM_CPPFLAGS = -I../common
 common_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/library/include -I../common
-common_LDADD = -lcuda -lcudart ../common/libutil.a ../common/libutil.a $(top_srcdir)/library/src/libdragon.a $(GLIB_LIBS)
+common_LDADD = -lcuda -lcudart ../common/libutil.a ../common/libutil.a $(top_srcdir)/library/src/libuxu.a $(GLIB_LIBS)
 binomialOptions_CFLAGS = $(common_CFLAGS) -DCUDAMEMCPY
 binomialOptions_LDADD = $(common_LDADD)
 binomialOptions_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@

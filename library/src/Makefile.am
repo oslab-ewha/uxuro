@@ -1,10 +1,10 @@
 CLEANFILES = *~
 DISTCLEANFILES = *~
 
-noinst_LIBRARIES = libdragon.a
+noinst_LIBRARIES = libuxu.a
 
-libdragon_a_CFLAGS = $(GLIB_CFLAGS) $(CUDA_INC) -I../include
+libuxu_a_CFLAGS = $(GLIB_CFLAGS) $(CUDA_INC) -I../include
 
-libdragon_a_SOURCES = dragon.c
+libuxu_a_SOURCES = libuxu.c
 
 include $(top_srcdir)/makefile.cu
