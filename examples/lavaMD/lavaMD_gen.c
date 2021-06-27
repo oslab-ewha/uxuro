@@ -109,11 +109,11 @@ make_box_file(int n_boxes, int boxsize)
 }
 
 static void
-make_mem_file(const char *fname, int n_elems)
+make_mem_file(const char *fname, long n_elems)
 {
 	char	fpath[512];
 	FILE	*fp;
-	int	i;
+	long	i;
 
 	snprintf(fpath, 512, "%s/%s", folder, fname);
 	if ((fp = fopen(fpath, "w+")) == NULL) {
@@ -126,6 +126,28 @@ make_mem_file(const char *fname, int n_elems)
 		fp_t	val;
 
 		val = (rand() % 10 + 1) / 10.0;
+		fwrite(&val, sizeof(fp_t), 1, fp);
+	}
+	fclose(fp);
+}
+
+static void
+make_empty_file(const char *fname, long n_elems)
+{
+	char	fpath[512];
+	FILE	*fp;
+	long	i;
+
+	snprintf(fpath, 512, "%s/%s", folder, fname);
+	if ((fp = fopen(fpath, "w+")) == NULL) {
+		fprintf(stderr, "Cannot open for creating empty file: %s\n", fpath);
+		abort();
+		exit(EXIT_FAILURE);
+	}
+
+	for (i = 0; i < n_elems; i++) {
+		fp_t	val = 0;
+
 		fwrite(&val, sizeof(fp_t), 1, fp);
 	}
 	fclose(fp);
@@ -194,6 +216,7 @@ main(int argc, char *argv [])
 	make_mem_file("rv.mem", dim_cpu.space_elem * 4);
 	// input (charge)
 	make_mem_file("qv.mem", dim_cpu.space_elem);
+	make_empty_file("fv.mem", dim_cpu.space_elem * 4);
 
 	return 0;
 }
