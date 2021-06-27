@@ -165,7 +165,7 @@ compute_tran_temp(cuio_ptr_t power, cuio_ptr_t temps[2], long col, long row,
 
 	float	max_slope = MAX_PD / (FACTOR_CHIP * t_chip * SPEC_HEAT_SI);
 	float	step = PRECISION / max_slope;
-	float	t;
+	long	t;
 
 	float	time_elapsed = 0.001;
 
@@ -214,7 +214,7 @@ main(int argc, char *argv[])
 	params_t	params;
 	const char	*folder;
 
-	long	total_iterations = 60;
+	long	total_iterations = 6;
 	long	pyramid_height = 1; // number of iterations
 
 	unsigned	ticks_pre, ticks_kern, ticks_post;
@@ -251,10 +251,10 @@ main(int argc, char *argv[])
 	temps[1] = cuio_load_floats("output", size, CUIO_MODE_WRITEONLY);
 	power = cuio_load_floats("power", size, CUIO_MODE_READONLY);
 
-	ticks_pre = get_tickcount();
-
 	cuio_memcpy_h2d(&temps[0]);
 	cuio_memcpy_h2d(&power);
+
+	ticks_pre = get_tickcount();
 
 	printf("Start computing the transient temperature\n");
 
