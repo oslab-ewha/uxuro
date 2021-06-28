@@ -4,11 +4,11 @@
 #include "cudaio.h"
 
 static void
-gen_data_input(const char *folder, unsigned size)
+gen_data_input(const char *folder, long size)
 {
 	FILE	*fp;
 	char	fpath[256];
-	unsigned	i;
+	long	i;
 
 	snprintf(fpath, 256, "%s/data.mem", folder);
 	if ((fp = fopen(fpath, "w+")) == 0) {
@@ -24,11 +24,11 @@ gen_data_input(const char *folder, unsigned size)
 }
 
 static void
-gen_empty_output(const char *folder, unsigned size)
+gen_empty_output(const char *folder, long size)
 {
 	FILE	*fp;
 	char	fpath[256];
-	unsigned	i;
+	long	i;
 
 	snprintf(fpath, 256, "%s/result.mem", folder);
 	if ((fp = fopen(fpath, "w+")) == 0) {
@@ -46,14 +46,14 @@ gen_empty_output(const char *folder, unsigned size)
 static void
 confer_save(FILE *fp, const char *fpath, void *ctx)
 {
-	unsigned	size = *(int *)ctx;
-	fprintf(fp, "%u", size);
+	long	size = *(int *)ctx;
+	fprintf(fp, "%ld", size);
 }
 
 int
 main(int argc, char *argv[])
 {
-	unsigned	size;
+	long	size;
 	char	*folder;
 
 	if (argc == 3) {

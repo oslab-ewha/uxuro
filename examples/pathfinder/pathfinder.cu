@@ -125,13 +125,13 @@ static void
 confer_load(FILE *fp, const char *fpath, void *ctx)
 {
 	char	buf[1024];
-	unsigned	*psize = (unsigned *)ctx;
+	long	*psize = (long *)ctx;
 
 	if (fgets(buf, 1024, fp) == NULL) {
 		fprintf(stderr, "cannot get # of boxes: %s\n", fpath);
 		exit(2);
 	}
-	if (sscanf(buf, "%u", psize) != 1) {
+	if (sscanf(buf, "%lu", psize) != 1) {
 		fprintf(stderr, "invalid format: %s\n", fpath);
 		exit(3);
 	}
@@ -142,7 +142,7 @@ main(int argc, char *argv[])
 {
 	cuio_ptr_t	ptr_data, ptr_res;
 	const char	*folder;
-	unsigned	size;
+	long		size;
 	unsigned	ticks_pre, ticks_kern, ticks_post;
 
 	/* --------------- pyramid parameters --------------- */
@@ -163,7 +163,7 @@ main(int argc, char *argv[])
 	cuio_load_conf(confer_load, &size);
 
 	blockCols = size / smallBlockCol+((size % smallBlockCol == 0) ? 0: 1);
-	printf("pyramidHeight: %u\ngridSize: [%u]\nborder:[%u]\nblockSize: %u\nblockGrid:[%u]\ntargetBlock:[%u]\n",
+	printf("pyramidHeight: %u\ngridSize: [%ld]\nborder:[%u]\nblockSize: %u\nblockGrid:[%u]\ntargetBlock:[%u]\n",
 	       pyramid_height, size, borderCols, BLOCK_SIZE, blockCols, smallBlockCol);
 
 	init_tickcount();
