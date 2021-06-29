@@ -182,14 +182,14 @@ srad_cuda_2(float *E_C, float *W_C, float *N_C, float *S_C,
 
 	__syncthreads();
 	 
-	south_c[ty][tx] = C_cuda[index_s];
+	south_c[ty][tx] = index_s >= 0 && index_s < cols * rows ? C_cuda[index_s]: 0;
 
 	if (by == gridDim.y - 1) {
 		south_c[ty][tx] = C_cuda[cols * BLOCK_SIZE * (gridDim.y - 1) + BLOCK_SIZE * bx + cols * ( BLOCK_SIZE - 1 ) + tx];
 	}
 	__syncthreads();
 
-	east_c[ty][tx] = C_cuda[index_e];
+	east_c[ty][tx] = index_e >= 0 && index_e < cols * rows ? C_cuda[index_e]: 0;
 
 	if (bx == gridDim.x - 1) {
 		east_c[ty][tx] = C_cuda[cols * BLOCK_SIZE * by + BLOCK_SIZE * ( gridDim.x - 1) + cols * ty + BLOCK_SIZE-1];

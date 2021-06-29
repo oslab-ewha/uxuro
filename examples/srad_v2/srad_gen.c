@@ -12,11 +12,11 @@
 #include "srad.h"
 
 static void
-gen_random_matrix(const char *folder, unsigned size)
+gen_random_matrix(const char *folder, long size)
 {
 	FILE	*fp;
 	char	fpath[256];
-	unsigned	i;
+	long	i;
 
 	snprintf(fpath, 256, "%s/matrix.mem", folder);
 	if ((fp = fopen(fpath, "w+")) == 0) {
@@ -31,11 +31,11 @@ gen_random_matrix(const char *folder, unsigned size)
 }
 
 static void
-gen_empty_matrix(const char *folder, const char *fname, unsigned size)
+gen_empty_matrix(const char *folder, const char *fname, long size)
 {
 	FILE	*fp;
 	char	fpath[256];
-	unsigned	i;
+	long	i;
 
 	snprintf(fpath, 256, "%s/%s", folder, fname);
 	if ((fp = fopen(fpath, "w+")) == 0) {
@@ -52,14 +52,14 @@ gen_empty_matrix(const char *folder, const char *fname, unsigned size)
 static void
 confer_save(FILE *fp, const char *fpath, void *ctx)
 {
-	unsigned	size = *(unsigned *)ctx;
-	fprintf(fp, "%u", size);
+	long	size = *(long *)ctx;
+	fprintf(fp, "%ld", size);
 }
 
 int
 main(int argc, char *argv[]) 
 {
-	unsigned	size;
+	long	size;
 	const char	*folder;
 
 	if (argc == 3) {

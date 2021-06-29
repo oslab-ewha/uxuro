@@ -24,7 +24,7 @@
 #define LAMBDA	0.5	//Lambda value
 #define NITER	2	//number of iterations
 
-static unsigned	size, size_I, size_R;
+static long	size, size_I, size_R;
 static unsigned ticks_pre, ticks_cpu, ticks_gpu, ticks_post;
 
 static void
@@ -85,13 +85,13 @@ static void
 confer_load(FILE *fp, const char *fpath, void *ctx)
 {
 	char	buf[1024];
-	unsigned	*psize = (unsigned *)ctx;
+	long	*psize = (long *)ctx;
 
 	if (fgets(buf, 1024, fp) == NULL) {
 		fprintf(stderr, "cannot get # of boxes: %s\n", fpath);
 		exit(2);
 	}
-	if (sscanf(buf, "%u", psize) != 1) {
+	if (sscanf(buf, "%ld", psize) != 1) {
 		fprintf(stderr, "invalid format: %s\n", fpath);
 		exit(3);
 	}
