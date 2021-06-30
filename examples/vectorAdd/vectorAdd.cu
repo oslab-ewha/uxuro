@@ -57,13 +57,13 @@ static void
 confer_load(FILE *fp, const char *fpath, void *ctx)
 {
 	char	buf[1024];
-	unsigned	*pn_elems = (unsigned *)ctx;
+	long	*pn_elems = (long *)ctx;
 
 	if (fgets(buf, 1024, fp) == NULL) {
 		fprintf(stderr, "cannot option count: %s\n", fpath);
 		exit(2);
 	}
-	if (sscanf(buf, "%u", pn_elems) != 1) {
+	if (sscanf(buf, "%ld", pn_elems) != 1) {
 		fprintf(stderr, "invalid format: %s\n", fpath);
 		exit(3);
 	}
@@ -73,7 +73,7 @@ int
 main(int argc, char *argv[])
 {
 	cuio_ptr_t	ptr_A, ptr_B, ptr_C;
-	unsigned	n_elems, n_elems_sub = 0, i;
+	long		n_elems, n_elems_sub = 0, i;
 	unsigned	ticks_pre = 0, ticks_kern = 0, ticks_post = 0;
 	const char	*folder;
 	cudaError_t	err;
@@ -88,13 +88,13 @@ main(int argc, char *argv[])
 	cuio_load_conf(confer_load, &n_elems);
 
 	if (getenv("N_SUB_ELEMENTS")) {
-		n_elems_sub = atoi(getenv("N_SUB_ELEMENTS"));
+		n_elems_sub = atol(getenv("N_SUB_ELEMENTS"));
 	}
 
 	// Print the vector length to be used, and compute its size
-	printf("[Vector addition of %d elements", n_elems);
+	printf("[Vector addition of %ld elements", n_elems);
 	if (n_elems_sub > 0)
-		printf(" using %d sub elements", n_elems_sub);
+		printf(" using %ld sub elements", n_elems_sub);
 	else
 		n_elems_sub = n_elems;
 	printf("]\n");
@@ -157,4 +157,3 @@ main(int argc, char *argv[])
 
 	return 0;
 }
-
