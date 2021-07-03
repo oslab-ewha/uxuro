@@ -174,10 +174,8 @@ static void
 unload_by_write(const char *fpath, off_t offset, cuio_ptr_t *pptr)
 {
 	FILE	*fp;
-	const char	*wr_mode;
 
-	wr_mode = (type == CUIO_TYPE_GENERATOR) ? "ab+": "wb";
-	if ((fp = fopen(fpath, wr_mode)) == 0) {
+	if ((fp = fopen(fpath, "ab+")) == 0) {
 		fprintf(stderr, "Cannot open: %s\n", fpath);
 		exit(EXIT_FAILURE);
 	}
