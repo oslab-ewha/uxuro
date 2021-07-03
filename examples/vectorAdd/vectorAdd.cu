@@ -69,6 +69,8 @@ confer_load(FILE *fp, const char *fpath, void *ctx)
 	}
 }
 
+#define PAGE_ALIGN(size)	(((size)+((4096)-1))&(~((typeof(size))(4096)-1)))
+
 int
 main(int argc, char *argv[])
 {
@@ -89,6 +91,9 @@ main(int argc, char *argv[])
 
 	if (getenv("N_SUB_ELEMENTS")) {
 		n_elems_sub = atol(getenv("N_SUB_ELEMENTS"));
+		if (cuio_get_type() == CUIO_TYPE_HREG) {
+			n_elems_sub = PAGE_ALIGN(n_elems_sub);
+		}
 	}
 
 	// Print the vector length to be used, and compute its size
@@ -106,7 +111,7 @@ main(int argc, char *argv[])
 		if (i + n_elems_sub <= n_elems)
 			size = n_elems_sub * sizeof(float);
 		else
-			size = (n_elems - i - n_elems_sub) * sizeof(float);
+			size = (n_elems - i) * sizeof(float);
 		offset = i * sizeof(float);
 
 		init_tickcount();
@@ -121,11 +126,11 @@ main(int argc, char *argv[])
 		ticks_pre += get_tickcount();
 
 		// Launch the Vector Add CUDA Kernel
-		int blocksPerGrid = (n_elems + N_THREADS - 1) / N_THREADS;
+		int blocksPerGrid = (n_elems_sub + N_THREADS - 1) / N_THREADS;
 		printf("CUDA kernel launch with %d blocks of %d threads\n", blocksPerGrid, N_THREADS);
 
 		init_tickcount();
-		vectorAdd<<<blocksPerGrid, N_THREADS>>>((float *)ptr_A.ptr_d, (float *)ptr_B.ptr_d, (float *)ptr_C.ptr_d, n_elems_sub);
+		vectorAdd<<<blocksPerGrid, N_THREADS>>>((float *)ptr_A.ptr_d, (float *)ptr_B.ptr_d, (float *)ptr_C.ptr_d, size / sizeof(float));
 		CUDA_CALL_SAFE(cudaDeviceSynchronize());
 
 		err = cudaGetLastError();
