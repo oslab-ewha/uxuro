@@ -14,11 +14,11 @@ randData(real low, real high)
 }
 
 static void
-gen_option_data(const char *folder, unsigned n_options)
+gen_option_data(const char *folder, unsigned long n_options)
 {
 	FILE	*fp;
 	char	fpath[256];
-	unsigned	i;
+	unsigned long	i;
 
 	snprintf(fpath, 256, "%s/optionData.mem", folder);
 	if ((fp = fopen(fpath, "w+")) == 0) {
@@ -40,11 +40,11 @@ gen_option_data(const char *folder, unsigned n_options)
 }
 
 static void
-gen_empty_output(const char *folder, unsigned n_options)
+gen_empty_output(const char *folder, unsigned long n_options)
 {
 	FILE	*fp;
 	char	fpath[256];
-	unsigned	i;
+	unsigned long	i;
 
 	snprintf(fpath, 256, "%s/callValue.mem", folder);
 	if ((fp = fopen(fpath, "w+")) == 0) {
@@ -62,14 +62,14 @@ gen_empty_output(const char *folder, unsigned n_options)
 static void
 confer_save(FILE *fp, const char *fpath, void *ctx)
 {
-	unsigned	n_options = *(unsigned *)ctx;
-	fprintf(fp, "%u", n_options);
+	unsigned long	n_options = *(unsigned long *)ctx;
+	fprintf(fp, "%lu", n_options);
 }
 
 int
 main(int argc, char *argv[])
 {
-	unsigned	n_options;
+	unsigned long	n_options;
 	char	*folder;
 
 	if (argc == 3) {
@@ -77,7 +77,7 @@ main(int argc, char *argv[])
 		folder = argv[2];
 	}
 	else {
-		printf("Usage: %s <# of optinos> folder\n", argv[0]);
+		printf("Usage: %s <# of options> folder\n", argv[0]);
 		exit(0);
 	}
 

@@ -39,13 +39,13 @@ static void
 confer_load(FILE *fp, const char *fpath, void *ctx)
 {
 	char	buf[1024];
-	unsigned	*pn_options = (unsigned *)ctx;
+	unsigned long	*pn_options = (unsigned long *)ctx;
 
 	if (fgets(buf, 1024, fp) == NULL) {
 		fprintf(stderr, "cannot get # of boxes: %s\n", fpath);
 		exit(2);
 	}
-	if (sscanf(buf, "%u", pn_options) != 1) {
+	if (sscanf(buf, "%lu", pn_options) != 1) {
 		fprintf(stderr, "invalid format: %s\n", fpath);
 		exit(3);
 	}
@@ -55,7 +55,7 @@ int
 main(int argc, char *argv[])
 {
 	cuio_ptr_t	ptr_option_data, ptr_calls;
-	unsigned	n_options;
+	unsigned long	n_options;
 	unsigned	ticks_pre, ticks_kern, ticks_post;
 	const char	*folder;
 
