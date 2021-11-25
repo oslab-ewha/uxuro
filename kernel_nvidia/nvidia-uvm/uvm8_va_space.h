@@ -44,7 +44,7 @@
 #include "uvm8_ats_ibm.h"
 #include "uvm8_va_space_mm.h"
 
-typedef struct uvm_nvmgpu_va_space_t
+typedef struct uvm_uxu_va_space_t
 {
     bool is_initailized;
 
@@ -62,7 +62,7 @@ typedef struct uvm_nvmgpu_va_space_t
     uvm_mutex_t lock_blocks;
 
     struct list_head lru_head;
-} uvm_nvmgpu_va_space_t;
+} uvm_uxu_va_space_t;
 
 // uvm_deferred_free_object provides a mechanism for building and later freeing
 // a list of objects which are owned by a VA space, but can't be freed while the
@@ -420,7 +420,7 @@ struct uvm_va_space_struct
     // Queue item for deferred f_ops->release() handling
     nv_kthread_q_item_t deferred_release_q_item;
 
-    uvm_nvmgpu_va_space_t nvmgpu_va_space;
+    uvm_uxu_va_space_t uxu_va_space;
 };
 
 static uvm_gpu_t *uvm_va_space_get_gpu(uvm_va_space_t *va_space, uvm_gpu_id_t gpu_id)

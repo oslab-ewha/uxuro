@@ -1054,9 +1054,9 @@ typedef struct
 } UVM_MAP_EXTERNAL_SPARSE_PARAMS;
 
 //
-// UvmNvmgpuInitialize
+// UvmUxuInitialize
 //
-#define UVM_NVMGPU_INITIALIZE                                         UVM_IOCTL_BASE(1000)
+#define UVM_UXU_INITIALIZE                                         UVM_IOCTL_BASE(1000)
 
 typedef struct
 {
@@ -1064,26 +1064,12 @@ typedef struct
     unsigned long    trash_reserved_nr_pages;   // IN
     unsigned short   flags;                     // IN
     NV_STATUS        rmStatus;                  // OUT
-} UVM_NVMGPU_INITIALIZE_PARAMS;
+} UVM_UXU_INITIALIZE_PARAMS;
 
 //
-// UvmNvmgpuRegisterFileVaSpace
+// UvmUxuRegisterFileVaSpace
 //
-#define UVM_NVMGPU_REGISTER_FILE_VA_SPACE                             UVM_IOCTL_BASE(1001)
-
-typedef struct
-{
-    int             backing_fd;         // IN
-    void            *uvm_addr;          // IN
-    size_t          size;               // IN
-    unsigned short  flags;              // IN
-    NV_STATUS       rmStatus;           // OUT
-} UVM_NVMGPU_REGISTER_FILE_VA_SPACE_PARAMS;
-
-//
-// UvmNvmgpuRemap
-//
-#define UVM_NVMGPU_REMAP                                              UVM_IOCTL_BASE(1004)
+#define UVM_UXU_REGISTER_FILE_VA_SPACE                             UVM_IOCTL_BASE(1001)
 
 typedef struct
 {
@@ -1092,7 +1078,21 @@ typedef struct
     size_t          size;               // IN
     unsigned short  flags;              // IN
     NV_STATUS       rmStatus;           // OUT
-} UVM_NVMGPU_REMAP_PARAMS;
+} UVM_UXU_REGISTER_FILE_VA_SPACE_PARAMS;
+
+//
+// UvmUxuRemap
+//
+#define UVM_UXU_REMAP                                              UVM_IOCTL_BASE(1004)
+
+typedef struct
+{
+    int             backing_fd;         // IN
+    void            *uvm_addr;          // IN
+    size_t          size;               // IN
+    unsigned short  flags;              // IN
+    NV_STATUS       rmStatus;           // OUT
+} UVM_UXU_REMAP_PARAMS;
 
 //
 // Temporary ioctls which should be removed before UVM 8 release

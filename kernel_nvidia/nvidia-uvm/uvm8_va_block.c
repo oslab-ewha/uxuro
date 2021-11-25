@@ -868,17 +868,17 @@ assign_page(uvm_va_block_t *block, bool zero)
     return page;
 }
 
-static inline bool nvmgpu_is_pagecachable(uvm_va_block_t *block, uvm_page_index_t page_id)
+static inline bool uxu_is_pagecachable(uvm_va_block_t *block, uvm_page_index_t page_id)
 {
     struct inode *inode;
     uvm_page_index_t	outer_max;
     loff_t len_remain;
 
-    if (!uvm_nvmgpu_is_managed(block->va_range))
+    if (!uvm_uxu_is_managed(block->va_range))
         return false;
-    if (block->va_range->node.nvmgpu_rtn.flags & (UVM_NVMGPU_FLAG_VOLATILE | UVM_NVMGPU_FLAG_USEHOSTBUF))
+    if (block->va_range->node.uxu_rtn.flags & (UVM_UXU_FLAG_VOLATILE | UVM_UXU_FLAG_USEHOSTBUF))
         return false;
-    inode = block->va_range->node.nvmgpu_rtn.filp->f_mapping->host;
+    inode = block->va_range->node.uxu_rtn.filp->f_mapping->host;
     len_remain = i_size_read(inode) - (block->start - block->va_range->node.start);
     outer_max = (len_remain + PAGE_SIZE - 1) >> PAGE_SHIFT;
     if (page_id >= outer_max)
@@ -906,7 +906,7 @@ static NV_STATUS block_populate_page_cpu(uvm_va_block_t *block, uvm_page_index_t
     if (block_test && block_test->inject_cpu_pages_allocation_error)
         return NV_ERR_NO_MEMORY;
 
-    if (nvmgpu_is_pagecachable(block, page_index)) {
+    if (uxu_is_pagecachable(block, page_index)) {
         page = assign_pagecache(block, page_index);
 	if (page)
 		uvm_page_mask_set(&block->cpu.pagecached, page_index);
@@ -931,7 +931,7 @@ static NV_STATUS block_populate_page_cpu(uvm_va_block_t *block, uvm_page_index_t
         goto error;
 
     block->cpu.pages[page_index] = page;
-    block->nvmgpu_use_uvm_buffer = true;
+    block->uxu_use_uvm_buffer = true;
     return NV_OK;
 
 error:
@@ -2204,7 +2204,7 @@ static void block_update_page_dirty_state(uvm_va_block_t *block,
         return;
 
     if (uvm_page_mask_test(&block->cpu.pagecached, page_index)) {
-	    uvm_nvmgpu_set_page_dirty(block->cpu.pages[page_index]);
+	    uvm_uxu_set_page_dirty(block->cpu.pages[page_index]);
     }
     else {
 	    if (uvm_id_equal(src_id, block->va_range->preferred_location))
@@ -2892,12 +2892,12 @@ static NV_STATUS block_copy_resident_pages(uvm_va_block_t *block,
     /*
      * TODO: copy is always enabled when cause == UVM_MAKE_RESIDENT_CAUSE_EVICTION.
      * This will drop performance but it's a simple workaround.
-     * A kernel panic occurs when copy with UVM_NVMGPU_FLAG_READ is skipped.
+     * A kernel panic occurs when copy with UVM_UXU_FLAG_READ is skipped.
      */
-    if (!uvm_nvmgpu_is_managed(block->va_range)
-        || (cause != UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && cause != UVM_MAKE_RESIDENT_CAUSE_NVMGPU)
-        || (cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && UVM_ID_IS_CPU(dst_id) && uvm_nvmgpu_need_to_evict_from_gpu(block))
-        || (cause == UVM_MAKE_RESIDENT_CAUSE_NVMGPU && UVM_ID_IS_GPU(dst_id))
+    if (!uvm_uxu_is_managed(block->va_range)
+        || (cause != UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && cause != UVM_MAKE_RESIDENT_CAUSE_UXU)
+        || (cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && UVM_ID_IS_CPU(dst_id) && uvm_uxu_need_to_evict_from_gpu(block))
+        || (cause == UVM_MAKE_RESIDENT_CAUSE_UXU && UVM_ID_IS_GPU(dst_id))
     ) {
         status = block_copy_resident_pages_mask(block,
                                                 block_context,
@@ -3011,7 +3011,7 @@ NV_STATUS uvm_va_block_make_resident(uvm_va_block_t *va_block,
     uvm_page_mask_t *unmap_page_mask = &va_block_context->make_resident.page_mask;
     uvm_page_mask_t *resident_mask;
 
-    bool do_nvmgpu_write = false;
+    bool do_uxu_write = false;
 
     va_block_context->make_resident.dest_id = dest_id;
     va_block_context->make_resident.cause = cause;
@@ -3026,24 +3026,24 @@ NV_STATUS uvm_va_block_make_resident(uvm_va_block_t *va_block,
     UVM_ASSERT(va_block->va_range);
     UVM_ASSERT(va_block->va_range->type == UVM_VA_RANGE_TYPE_MANAGED);
 
-    if (uvm_nvmgpu_is_managed(va_range)
-        && uvm_nvmgpu_need_to_evict_from_gpu(va_block)
+    if (uvm_uxu_is_managed(va_range)
+        && uvm_uxu_need_to_evict_from_gpu(va_block)
         && (cause == UVM_MAKE_RESIDENT_CAUSE_EVICTION
             || (cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && UVM_ID_IS_CPU(dest_id)))
     ) {
-        uvm_nvmgpu_range_tree_node_t *nvmgpu_rtn = &va_block->va_range->node.nvmgpu_rtn;
+        uvm_uxu_range_tree_node_t *uxu_rtn = &va_block->va_range->node.uxu_rtn;
 
-        if (!uvm_nvmgpu_block_file_dirty(va_block)
-            && ((nvmgpu_rtn->flags & UVM_NVMGPU_FLAG_VOLATILE)
-                || (nvmgpu_rtn->flags & UVM_NVMGPU_FLAG_USEHOSTBUF))
+        if (!uvm_uxu_block_file_dirty(va_block)
+            && ((uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE)
+                || (uxu_rtn->flags & UVM_UXU_FLAG_USEHOSTBUF))
         ) {
-            if (nvmgpu_rtn->flags & UVM_NVMGPU_FLAG_USEHOSTBUF)
-                uvm_nvmgpu_prepare_block_for_hostbuf(va_block);
-            uvm_nvmgpu_block_mark_recent_in_buffer(va_block);
+            if (uxu_rtn->flags & UVM_UXU_FLAG_USEHOSTBUF)
+                uvm_uxu_prepare_block_for_hostbuf(va_block);
+            uvm_uxu_block_mark_recent_in_buffer(va_block);
         }
         else {
-            uvm_nvmgpu_write_begin(va_block, cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE);
-            do_nvmgpu_write = true;
+            uvm_uxu_write_begin(va_block, cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE);
+            do_uxu_write = true;
         }
     }
     resident_mask = block_resident_mask_get_alloc(va_block, dest_id);
@@ -3106,9 +3106,9 @@ NV_STATUS uvm_va_block_make_resident(uvm_va_block_t *va_block,
     // empty).
     if (uvm_processor_mask_test(&va_block->resident, dest_id))
         block_mark_memory_used(va_block, dest_id);
-    if (do_nvmgpu_write) {
+    if (do_uxu_write) {
         status = uvm_tracker_wait(&va_block->tracker);
-        uvm_nvmgpu_write_end(va_block, cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE);
+        uvm_uxu_write_end(va_block, cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE);
         if (status != NV_OK)
             return status;
     }
@@ -3959,7 +3959,7 @@ static void block_unmap_cpu(uvm_va_block_t *block, uvm_va_block_region_t region,
         if (!block_has_valid_mapping_cpu(block, subregion))
             continue;
 
-        // NOTE: unmap required even for nvmgpu
+        // NOTE: unmap required even for uxu
         unmap_mapping_range(&va_range->va_space->mapping,
                             uvm_va_block_region_start(block, subregion),
                             uvm_va_block_region_size(subregion), 1);
@@ -7849,7 +7849,7 @@ static void block_kill(uvm_va_block_t *block)
 
     // Free CPU pages
     if (block->cpu.pages) {
-        if (block->nvmgpu_use_uvm_buffer) {
+        if (block->uxu_use_uvm_buffer) {
             uvm_page_index_t page_index;
             for_each_va_block_page(page_index, block) {
                 if (block->cpu.pages[page_index]) {
@@ -7868,7 +7868,7 @@ static void block_kill(uvm_va_block_t *block)
                     UVM_ASSERT(!uvm_page_mask_test(&block->cpu.resident, page_index));
                 }
             }
-            block->nvmgpu_use_uvm_buffer = false;
+            block->uxu_use_uvm_buffer = false;
         }
 
         // Clearing the resident bit isn't strictly necessary since this block
@@ -9530,7 +9530,7 @@ NV_STATUS uvm_va_block_service_locked(uvm_processor_id_t processor_id,
     uvm_perf_prefetch_hint_t prefetch_hint = UVM_PERF_PREFETCH_HINT_NONE();
     uvm_processor_mask_t processors_involved_in_cpu_migration;
 
-    bool do_nvmgpu_read = false;
+    bool do_uxu_read = false;
     uvm_assert_mutex_locked(&va_block->lock);
     UVM_ASSERT(va_range->type == UVM_VA_RANGE_TYPE_MANAGED);
 
@@ -9631,17 +9631,17 @@ NV_STATUS uvm_va_block_service_locked(uvm_processor_id_t processor_id,
                                  new_residency_mask,
                                  &service_context->read_duplicate_mask)) {
 
-            if (uvm_nvmgpu_need_to_copy_from_file(va_block, processor_id)) {
-                status = uvm_nvmgpu_read_begin(va_block, block_retry, service_context);
+            if (uvm_uxu_need_to_copy_from_file(va_block, processor_id)) {
+                status = uvm_uxu_read_begin(va_block, block_retry, service_context);
                 if (status != NV_OK)
                     goto error;
-                do_nvmgpu_read = true;
+                do_uxu_read = true;
             }
 
-            if (uvm_nvmgpu_is_managed(va_block->va_range)
-                && (va_block->nvmgpu_use_uvm_buffer)
+            if (uvm_uxu_is_managed(va_block->va_range)
+                && (va_block->uxu_use_uvm_buffer)
             )
-                uvm_nvmgpu_block_mark_recent_in_buffer(va_block);
+                uvm_uxu_block_mark_recent_in_buffer(va_block);
 
             status = uvm_va_block_make_resident(va_block,
                                                 block_retry,
@@ -9958,14 +9958,14 @@ NV_STATUS uvm_va_block_service_locked(uvm_processor_id_t processor_id,
     }
 
 error:
-    if (do_nvmgpu_read) {
+    if (do_uxu_read) {
         uvm_tracker_wait(&va_block->tracker);
 
-        uvm_nvmgpu_read_end(va_block);
+        uvm_uxu_read_end(va_block);
 
         if (UVM_ID_IS_CPU(processor_id)) {
-            uvm_nvmgpu_write_begin(va_block, false);
-            uvm_nvmgpu_write_end(va_block, false);
+            uvm_uxu_write_begin(va_block, false);
+            uvm_uxu_write_end(va_block, false);
         }
     }
 

@@ -456,8 +456,8 @@ struct uvm_va_block_struct
 
     uvm_perf_module_data_desc_t perf_modules_data[UVM_PERF_MODULE_TYPE_COUNT];
 
-    bool nvmgpu_use_uvm_buffer;
-    struct list_head nvmgpu_lru;
+    bool uxu_use_uvm_buffer;
+    struct list_head uxu_lru;
 };
 
 // We define additional per-VA Block fields for testing. When

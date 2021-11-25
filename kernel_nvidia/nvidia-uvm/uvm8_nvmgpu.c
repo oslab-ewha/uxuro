@@ -42,14 +42,14 @@ static void *fsdata_array[PAGES_PER_UVM_VA_BLOCK];
 static int pagecache_reducer(void *ctx)
 {
 	uvm_va_space_t *va_space = (uvm_va_space_t *)ctx;
-	uvm_nvmgpu_va_space_t *nvmgpu_va_space = &va_space->nvmgpu_va_space;
+	uvm_uxu_va_space_t *uxu_va_space = &va_space->uxu_va_space;
 	uvm_thread_context_wrapper_t	thread_context;
 
 	uvm_thread_context_add(&thread_context.context);
 
 	while (!kthread_should_stop()) {
-		if (uvm_nvmgpu_has_to_reclaim_blocks(nvmgpu_va_space))
-			uvm_nvmgpu_reduce_memory_consumption(va_space);
+		if (uvm_uxu_has_to_reclaim_blocks(uxu_va_space))
+			uvm_uxu_reduce_memory_consumption(va_space);
 		schedule_timeout_idle(10);
 	}
 
@@ -60,51 +60,51 @@ static int pagecache_reducer(void *ctx)
 void
 stop_pagecache_reducer(uvm_va_space_t *va_space)
 {
-	uvm_nvmgpu_va_space_t *nvmgpu_va_space = &va_space->nvmgpu_va_space;
-	if (nvmgpu_va_space->reducer) {
-		kthread_stop(nvmgpu_va_space->reducer);
-		nvmgpu_va_space->reducer = NULL;
+	uvm_uxu_va_space_t *uxu_va_space = &va_space->uxu_va_space;
+	if (uxu_va_space->reducer) {
+		kthread_stop(uxu_va_space->reducer);
+		uxu_va_space->reducer = NULL;
 	}
 }
 
 /**
- * Initialize the NVMGPU module. This function has to be called once per
+ * Initialize the UXU module. This function has to be called once per
  * va_space. It must be called before calling
- * "uvm_nvmgpu_register_file_va_space"
+ * "uvm_uxu_register_file_va_space"
  *
  * @param va_space: va_space to be initialized this module with.
  *
- * @param trash_nr_blocks: maximum number of va_block NVMGPU should evict out
+ * @param trash_nr_blocks: maximum number of va_block UXU should evict out
  * at one time.
  *
- * @param trash_reserved_nr_pages: NVMGPU will automatically evicts va_block
+ * @param trash_reserved_nr_pages: UXU will automatically evicts va_block
  * when number of free pages plus number of page-cache pages less than this
  * value.
  *
  * @param flags: the flags that dictate the optimization behaviors. See
- * UVM_NVMGPU_INIT_* for more details.
+ * UVM_UXU_INIT_* for more details.
  *
  * @return: NV_ERR_INVALID_OPERATION if `va_space` has been initialized already,
  * otherwise NV_OK.
  */
 NV_STATUS
-uvm_nvmgpu_initialize(uvm_va_space_t *va_space, unsigned long trash_nr_blocks, unsigned long trash_reserved_nr_pages, unsigned short flags)
+uvm_uxu_initialize(uvm_va_space_t *va_space, unsigned long trash_nr_blocks, unsigned long trash_reserved_nr_pages, unsigned short flags)
 {
-	uvm_nvmgpu_va_space_t *nvmgpu_va_space = &va_space->nvmgpu_va_space;
+	uvm_uxu_va_space_t *uxu_va_space = &va_space->uxu_va_space;
 
-	if (!nvmgpu_va_space->is_initailized) {
-		INIT_LIST_HEAD(&nvmgpu_va_space->lru_head);
+	if (!uxu_va_space->is_initailized) {
+		INIT_LIST_HEAD(&uxu_va_space->lru_head);
 		/* TODO: Lower down the locking order.
 		 * Because invalid locking order warnings are generated when debug mode is enabled.
 		 */
-		uvm_mutex_init(&nvmgpu_va_space->lock, UVM_LOCK_ORDER_VA_SPACE);
-		uvm_mutex_init(&nvmgpu_va_space->lock_blocks, UVM_LOCK_ORDER_VA_SPACE_NVMGPU);
-		nvmgpu_va_space->trash_nr_blocks = trash_nr_blocks;
-		nvmgpu_va_space->trash_reserved_nr_pages = trash_reserved_nr_pages;
-		nvmgpu_va_space->flags = flags;
-		nvmgpu_va_space->is_initailized = true;
+		uvm_mutex_init(&uxu_va_space->lock, UVM_LOCK_ORDER_VA_SPACE);
+		uvm_mutex_init(&uxu_va_space->lock_blocks, UVM_LOCK_ORDER_VA_SPACE_UXU);
+		uxu_va_space->trash_nr_blocks = trash_nr_blocks;
+		uxu_va_space->trash_reserved_nr_pages = trash_reserved_nr_pages;
+		uxu_va_space->flags = flags;
+		uxu_va_space->is_initailized = true;
 
-		nvmgpu_va_space->reducer = kthread_run(pagecache_reducer, va_space, "reducer");
+		uxu_va_space->reducer = kthread_run(pagecache_reducer, va_space, "reducer");
 		return NV_OK;
 	}
 	else
@@ -113,7 +113,7 @@ uvm_nvmgpu_initialize(uvm_va_space_t *va_space, unsigned long trash_nr_blocks, u
 
 /**
  * Register a file to this `va_space`.
- * NVMGPU will start tracking this UVM region if this function return success.
+ * UXU will start tracking this UVM region if this function return success.
  *
  * @param va_space: va_space to register the file to.
  *
@@ -122,10 +122,10 @@ uvm_nvmgpu_initialize(uvm_va_space_t *va_space, unsigned long trash_nr_blocks, u
  * @return: NV_OK on success, NV_ERR_* otherwise.
  */
 NV_STATUS
-uvm_nvmgpu_register_file_va_space(uvm_va_space_t *va_space, UVM_NVMGPU_REGISTER_FILE_VA_SPACE_PARAMS *params)
+uvm_uxu_register_file_va_space(uvm_va_space_t *va_space, UVM_UXU_REGISTER_FILE_VA_SPACE_PARAMS *params)
 {
 	NV_STATUS	ret = NV_OK;
-	uvm_nvmgpu_range_tree_node_t	*nvmgpu_rtn;
+	uvm_uxu_range_tree_node_t	*uxu_rtn;
 
 	uvm_range_tree_node_t	*node = uvm_range_tree_find(&va_space->va_range_tree, (NvU64)params->uvm_addr);
 	NvU64	expected_start_addr = (NvU64)params->uvm_addr;
@@ -133,9 +133,9 @@ uvm_nvmgpu_register_file_va_space(uvm_va_space_t *va_space, UVM_NVMGPU_REGISTER_
 
 	size_t	max_nr_blocks;
 
-	// Make sure that uvm_nvmgpu_initialize is called before this function.
-	if (!va_space->nvmgpu_va_space.is_initailized) {
-		printk(KERN_DEBUG "Error: Call uvm_nvmgpu_register_file_va_space before uvm_nvmgpu_initialize\n");
+	// Make sure that uvm_uxu_initialize is called before this function.
+	if (!va_space->uxu_va_space.is_initailized) {
+		printk(KERN_DEBUG "Error: Call uvm_uxu_register_file_va_space before uvm_uxu_initialize\n");
 		return NV_ERR_INVALID_OPERATION;
 	}
 
@@ -152,37 +152,37 @@ uvm_nvmgpu_register_file_va_space(uvm_va_space_t *va_space, UVM_NVMGPU_REGISTER_
 		return NV_ERR_OPERATING_SYSTEM;
 	}
 
-	nvmgpu_rtn = &node->nvmgpu_rtn;
+	uxu_rtn = &node->uxu_rtn;
 
 	// Get the struct file from the input file descriptor.
-	if ((nvmgpu_rtn->filp = fget(params->backing_fd)) == NULL) {
+	if ((uxu_rtn->filp = fget(params->backing_fd)) == NULL) {
 		printk(KERN_DEBUG "Cannot find the backing fd: %d\n", params->backing_fd);
 		return NV_ERR_OPERATING_SYSTEM;
 	}
 
 	// Record the flags and the file size.
-	nvmgpu_rtn->flags = params->flags;
-	nvmgpu_rtn->size = params->size;
+	uxu_rtn->flags = params->flags;
+	uxu_rtn->size = params->size;
 
 	// Calculate the number of blocks associated with this UVM range.
 	max_nr_blocks = uvm_va_range_num_blocks(container_of(node, uvm_va_range_t, node));
 
 	// Allocate the bitmap to tell which blocks have dirty data on the file.
-	nvmgpu_rtn->is_file_dirty_bitmaps = kzalloc(sizeof(unsigned long) * BITS_TO_LONGS(max_nr_blocks), GFP_KERNEL);
-	if (!nvmgpu_rtn->is_file_dirty_bitmaps) {
+	uxu_rtn->is_file_dirty_bitmaps = kzalloc(sizeof(unsigned long) * BITS_TO_LONGS(max_nr_blocks), GFP_KERNEL);
+	if (!uxu_rtn->is_file_dirty_bitmaps) {
 		ret = NV_ERR_NO_MEMORY;
 		goto _register_err_0;
 	}
 
 	// Allocate the bitmap to tell which blocks have data cached on the host.
-	nvmgpu_rtn->has_data_bitmaps = kzalloc(sizeof(unsigned long) * BITS_TO_LONGS(max_nr_blocks), GFP_KERNEL);
-	if (!nvmgpu_rtn->has_data_bitmaps) {
+	uxu_rtn->has_data_bitmaps = kzalloc(sizeof(unsigned long) * BITS_TO_LONGS(max_nr_blocks), GFP_KERNEL);
+	if (!uxu_rtn->has_data_bitmaps) {
 		ret = NV_ERR_NO_MEMORY;
 		goto _register_err_1;
 	}
 
-	nvmgpu_rtn->iov = kmalloc(sizeof(struct iovec) * PAGES_PER_UVM_VA_BLOCK, GFP_KERNEL);
-	if (!nvmgpu_rtn->iov) {
+	uxu_rtn->iov = kmalloc(sizeof(struct iovec) * PAGES_PER_UVM_VA_BLOCK, GFP_KERNEL);
+	if (!uxu_rtn->iov) {
 		ret = NV_ERR_NO_MEMORY;
 		goto _register_err_2;
 	}
@@ -191,26 +191,26 @@ uvm_nvmgpu_register_file_va_space(uvm_va_space_t *va_space, UVM_NVMGPU_REGISTER_
 
 	// Found an error. Free allocated memory before go out.
 _register_err_2:
-	kfree(nvmgpu_rtn->has_data_bitmaps);
+	kfree(uxu_rtn->has_data_bitmaps);
 _register_err_1:
-	kfree(nvmgpu_rtn->is_file_dirty_bitmaps);
+	kfree(uxu_rtn->is_file_dirty_bitmaps);
 _register_err_0:
 	return ret;
 }
 
 NV_STATUS
-uvm_nvmgpu_remap(uvm_va_space_t *va_space, UVM_NVMGPU_REMAP_PARAMS *params)
+uvm_uxu_remap(uvm_va_space_t *va_space, UVM_UXU_REMAP_PARAMS *params)
 {
-	uvm_nvmgpu_range_tree_node_t	*nvmgpu_rtn;
+	uvm_uxu_range_tree_node_t	*uxu_rtn;
 	uvm_va_block_t	*va_block, *va_block_next;
-	uvm_nvmgpu_va_space_t	*nvmgpu_va_space = &va_space->nvmgpu_va_space;
+	uvm_uxu_va_space_t	*uxu_va_space = &va_space->uxu_va_space;
 
 	uvm_va_range_t	*va_range = uvm_va_range_find(va_space, (NvU64)params->uvm_addr);
 	NvU64	expected_start_addr = (NvU64)params->uvm_addr;
 
-	// Make sure that uvm_nvmgpu_initialize is called before this function.
-	if (!va_space->nvmgpu_va_space.is_initailized) {
-		printk(KERN_DEBUG "Error: Call uvm_nvmgpu_remap before uvm_nvmgpu_initialize\n");
+	// Make sure that uvm_uxu_initialize is called before this function.
+	if (!va_space->uxu_va_space.is_initailized) {
+		printk(KERN_DEBUG "Error: Call uvm_uxu_remap before uvm_uxu_initialize\n");
 		return NV_ERR_INVALID_OPERATION;
 	}
 
@@ -221,57 +221,57 @@ uvm_nvmgpu_remap(uvm_va_space_t *va_space, UVM_NVMGPU_REMAP_PARAMS *params)
 		return NV_ERR_OPERATING_SYSTEM;
 	}
 
-	nvmgpu_rtn = &va_range->node.nvmgpu_rtn;
+	uxu_rtn = &va_range->node.uxu_rtn;
 
-	if (nvmgpu_rtn->flags & UVM_NVMGPU_FLAG_VOLATILE)
-		uvm_mutex_lock(&nvmgpu_va_space->lock);
+	if (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE)
+		uvm_mutex_lock(&uxu_va_space->lock);
 
 	// Volatile data is simply discarded even though it has been remapped with non-volatile
 	for_each_va_block_in_va_range_safe(va_range, va_block, va_block_next) {
-		uvm_nvmgpu_block_clear_file_dirty(va_block);
-		if (nvmgpu_rtn->flags & UVM_NVMGPU_FLAG_VOLATILE) {
-			uvm_nvmgpu_release_block(va_block);
-			list_del(&va_block->nvmgpu_lru);
+		uvm_uxu_block_clear_file_dirty(va_block);
+		if (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE) {
+			uvm_uxu_release_block(va_block);
+			list_del(&va_block->uxu_lru);
 		}
 	}
 
-	if (nvmgpu_rtn->flags & UVM_NVMGPU_FLAG_VOLATILE)
-		uvm_mutex_unlock(&nvmgpu_va_space->lock);
+	if (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE)
+		uvm_mutex_unlock(&uxu_va_space->lock);
 
-	nvmgpu_rtn->flags = params->flags;
+	uxu_rtn->flags = params->flags;
 
 	return NV_OK;
 }
 
 /**
  * Unregister the specified va_range.
- * NVMGPU will stop tracking this `va_range` after this point.
+ * UXU will stop tracking this `va_range` after this point.
  *
  * @param va_range: va_range to be untracked.
  *
  * @return: always NV_OK.
  */
 NV_STATUS
-uvm_nvmgpu_unregister_va_range(uvm_va_range_t *va_range)
+uvm_uxu_unregister_va_range(uvm_va_range_t *va_range)
 {
 	struct file	*filp;
 
-	uvm_nvmgpu_range_tree_node_t	*nvmgpu_rtn = &va_range->node.nvmgpu_rtn;
+	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_range->node.uxu_rtn;
 
-	filp = nvmgpu_rtn->filp;
+	filp = uxu_rtn->filp;
 
 	UVM_ASSERT(filp != NULL);
 
-	if (nvmgpu_rtn->is_file_dirty_bitmaps)
-		kfree(nvmgpu_rtn->is_file_dirty_bitmaps);
+	if (uxu_rtn->is_file_dirty_bitmaps)
+		kfree(uxu_rtn->is_file_dirty_bitmaps);
 
-	if (nvmgpu_rtn->has_data_bitmaps)
-		kfree(nvmgpu_rtn->has_data_bitmaps);
+	if (uxu_rtn->has_data_bitmaps)
+		kfree(uxu_rtn->has_data_bitmaps);
 
-	if (nvmgpu_rtn->iov)
-		kfree(nvmgpu_rtn->iov);
+	if (uxu_rtn->iov)
+		kfree(uxu_rtn->iov);
 
-	if ((nvmgpu_rtn->flags & UVM_NVMGPU_FLAG_WRITE) && !(nvmgpu_rtn->flags & UVM_NVMGPU_FLAG_VOLATILE))
+	if ((uxu_rtn->flags & UVM_UXU_FLAG_WRITE) && !(uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE))
 		vfs_fsync(filp, 1);
 
 	fput(filp);
@@ -280,7 +280,7 @@ uvm_nvmgpu_unregister_va_range(uvm_va_range_t *va_range)
 }
 
 static void
-uvm_nvmgpu_unmap_page(uvm_va_block_t *va_block, int page_index)
+uvm_uxu_unmap_page(uvm_va_block_t *va_block, int page_index)
 {
 	uvm_gpu_id_t	id;
 
@@ -312,7 +312,7 @@ insert_pagecache_to_va_block(uvm_va_block_t *va_block, int page_id, struct page 
 
 	if (va_block->cpu.pages[page_id] != page) {
 		if (va_block->cpu.pages[page_id] != NULL) {
-			uvm_nvmgpu_unmap_page(va_block, page_id);
+			uvm_uxu_unmap_page(va_block, page_id);
 			if (uvm_page_mask_test(&va_block->cpu.pagecached, page_id))
 				put_page(va_block->cpu.pages[page_id]);
 			else
@@ -347,7 +347,7 @@ insert_pagecache_to_va_block(uvm_va_block_t *va_block, int page_id, struct page 
 	return NV_OK;
 
 insert_pagecache_to_va_block_error:
-	uvm_nvmgpu_unmap_page(va_block, page_id);
+	uvm_uxu_unmap_page(va_block, page_id);
 	unlock_page(page);
 
 	return status;
@@ -587,15 +587,15 @@ struct page *
 assign_pagecache(uvm_va_block_t *block, uvm_page_index_t page_index)
 {
 	uvm_va_range_t	*va_range = block->va_range;
-	uvm_nvmgpu_range_tree_node_t	*nvmgpu_rtn = &va_range->node.nvmgpu_rtn;
-	struct file	*nvmgpu_file = nvmgpu_rtn->filp;
+	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_range->node.uxu_rtn;
+	struct file	*uxu_file = uxu_rtn->filp;
 	loff_t	file_start_offset = block->start - block->va_range->node.start;
 	loff_t	offset;
 	int	page_id = page_index;
 	struct page	*page;
 
 	offset = file_start_offset + page_id * PAGE_SIZE;
-	page = read_mapping_page(nvmgpu_file->f_mapping, offset, NULL);
+	page = read_mapping_page(uxu_file->f_mapping, offset, NULL);
 	if (page == NULL)
 		return NULL;
 	insert_pagecache_to_va_block(block, page_index, page);
@@ -604,9 +604,9 @@ assign_pagecache(uvm_va_block_t *block, uvm_page_index_t page_index)
 }
 
 static bool
-fill_pagecaches_for_read(struct file *nvmgpu_file, uvm_va_block_t *va_block, uvm_va_block_region_t region)
+fill_pagecaches_for_read(struct file *uxu_file, uvm_va_block_t *va_block, uvm_va_block_region_t region)
 {
-	struct inode	*inode = nvmgpu_file->f_mapping->host;
+	struct inode	*inode = uxu_file->f_mapping->host;
 	loff_t	isize;
 	uvm_page_mask_t read_mask;
 	int page_id;
@@ -627,7 +627,7 @@ fill_pagecaches_for_read(struct file *nvmgpu_file, uvm_va_block_t *va_block, uvm
 				lock_page(page);
 			continue;
 		}
-		if (prepare_page_for_read(nvmgpu_file, offset, va_block, page_id) != 0) {
+		if (prepare_page_for_read(uxu_file, offset, va_block, page_id) != 0) {
 			printk(KERN_DEBUG "Cannot prepare page for read at file offset 0x%llx\n", offset);
 			return false;
 		}
@@ -638,11 +638,11 @@ fill_pagecaches_for_read(struct file *nvmgpu_file, uvm_va_block_t *va_block, uvm
 }
 
 static uvm_page_index_t
-get_region_readable_outer(uvm_va_block_t *va_block, struct file *nvmgpu_file)
+get_region_readable_outer(uvm_va_block_t *va_block, struct file *uxu_file)
 {
 	uvm_page_index_t	outer = ((va_block->end - va_block->start) >> PAGE_SHIFT) + 1;
 	uvm_page_index_t	outer_max;
-	struct inode	*inode = nvmgpu_file->f_mapping->host;
+	struct inode	*inode = uxu_file->f_mapping->host;
 	loff_t	len_remain = i_size_read(inode) - (va_block->start - va_block->va_range->node.start);
 
 	outer_max = (len_remain + PAGE_SIZE - 1) >> PAGE_SHIFT;
@@ -664,18 +664,18 @@ get_region_readable_outer(uvm_va_block_t *va_block, struct file *nvmgpu_file)
  * @return: NV_OK on success. NV_ERR_* otherwise.
  */
 NV_STATUS
-uvm_nvmgpu_read_begin(uvm_va_block_t *va_block, uvm_va_block_retry_t *block_retry, uvm_service_block_context_t *service_context)
+uvm_uxu_read_begin(uvm_va_block_t *va_block, uvm_va_block_retry_t *block_retry, uvm_service_block_context_t *service_context)
 {
 	NV_STATUS	status = NV_OK;
 
 	uvm_va_range_t	*va_range = va_block->va_range;
 
-	uvm_nvmgpu_range_tree_node_t	*nvmgpu_rtn = &va_range->node.nvmgpu_rtn;
+	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_range->node.uxu_rtn;
 
-	struct file	*nvmgpu_file = nvmgpu_rtn->filp;
+	struct file	*uxu_file = uxu_rtn->filp;
 
 	// Specify that the entire block is the region of concern.
-	uvm_va_block_region_t region = uvm_va_block_region(0, get_region_readable_outer(va_block, nvmgpu_file));
+	uvm_va_block_region_t region = uvm_va_block_region(0, get_region_readable_outer(va_block, uxu_file));
 
 	uvm_page_mask_t	my_mask;
 	// Record the original page mask and set the mask to all 1s.
@@ -686,13 +686,13 @@ uvm_nvmgpu_read_begin(uvm_va_block_t *va_block, uvm_va_block_retry_t *block_retr
 	uvm_page_mask_init_from_region(&service_context->block_context.make_resident.page_mask, region, NULL);
 	uvm_page_mask_copy(&my_mask, &service_context->block_context.make_resident.page_mask);
 
-	UVM_ASSERT(nvmgpu_file != NULL);
+	UVM_ASSERT(uxu_file != NULL);
 
-	if (!uvm_nvmgpu_block_has_data(va_block)) {
-		bool	is_file_dirty = uvm_nvmgpu_block_file_dirty(va_block);
+	if (!uvm_uxu_block_has_data(va_block)) {
+		bool	is_file_dirty = uvm_uxu_block_file_dirty(va_block);
 
 		// Prevent block_populate_pages from allocating new pages
-		uvm_nvmgpu_block_set_file_dirty(va_block);
+		uvm_uxu_block_set_file_dirty(va_block);
 
 		// Change this va_block's state: all pages are the residents of CPU.
 		status = uvm_va_block_make_resident(va_block,
@@ -702,11 +702,11 @@ uvm_nvmgpu_read_begin(uvm_va_block_t *va_block, uvm_va_block_retry_t *block_retr
 						    region,
 						    &my_mask,
 						    NULL,
-						    UVM_MAKE_RESIDENT_CAUSE_NVMGPU);
+						    UVM_MAKE_RESIDENT_CAUSE_UXU);
 
 		// Return the dirty state to the original
 		if (!is_file_dirty)
-			uvm_nvmgpu_block_clear_file_dirty(va_block);
+			uvm_uxu_block_clear_file_dirty(va_block);
 
 		if (status != NV_OK) {
 			printk(KERN_DEBUG "Cannot make temporary resident on CPU\n");
@@ -720,8 +720,8 @@ uvm_nvmgpu_read_begin(uvm_va_block_t *va_block, uvm_va_block_retry_t *block_retr
 		}
 	}
 
-	if (fill_pagecaches_for_read(nvmgpu_file, va_block, region)) {
-		uvm_nvmgpu_block_set_has_data(va_block);
+	if (fill_pagecaches_for_read(uxu_file, va_block, region)) {
+		uvm_uxu_block_set_has_data(va_block);
 	}
 	else {
 		status = NV_ERR_OPERATING_SYSTEM;
@@ -735,16 +735,16 @@ read_begin_err_0:
 }
 
 NV_STATUS
-uvm_nvmgpu_read_end(uvm_va_block_t *va_block)
+uvm_uxu_read_end(uvm_va_block_t *va_block)
 {
 	int	page_id;
 	struct page	*page;
 
 	uvm_page_mask_t	read_mask;
 
-	uvm_nvmgpu_range_tree_node_t	*nvmgpu_rtn = &va_block->va_range->node.nvmgpu_rtn;
-	struct file	*nvmgpu_file = nvmgpu_rtn->filp;
-	uvm_va_block_region_t	region = uvm_va_block_region(0, get_region_readable_outer(va_block, nvmgpu_file));
+	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_block->va_range->node.uxu_rtn;
+	struct file	*uxu_file = uxu_rtn->filp;
+	uvm_va_block_region_t	region = uvm_va_block_region(0, get_region_readable_outer(va_block, uxu_file));
 
 	uvm_page_mask_fill(&read_mask);
 	for_each_va_block_page_in_region_mask(page_id, &read_mask, region) {
@@ -764,14 +764,14 @@ uvm_nvmgpu_read_end(uvm_va_block_t *va_block)
  * @return: NV_OK on success. NV_ERR_* otherwise.
  */
 NV_STATUS
-uvm_nvmgpu_flush_block(uvm_va_block_t *va_block)
+uvm_uxu_flush_block(uvm_va_block_t *va_block)
 {
 	NV_STATUS	status = NV_OK;
 	uvm_va_range_t	*va_range = va_block->va_range;
 	uvm_va_space_t	*va_space = va_range->va_space;
-	uvm_nvmgpu_range_tree_node_t	*nvmgpu_rtn = &va_range->node.nvmgpu_rtn;
+	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_range->node.uxu_rtn;
 
-	if (!(nvmgpu_rtn->flags & UVM_NVMGPU_FLAG_WRITE))
+	if (!(uxu_rtn->flags & UVM_UXU_FLAG_WRITE))
 		return NV_OK;
 
 	// Move data from GPU to CPU
@@ -784,13 +784,13 @@ uvm_nvmgpu_flush_block(uvm_va_block_t *va_block)
 			return NV_ERR_NO_MEMORY;
 		}
 
-		// Force direct flush into the file for UVM_NVMGPU_FLAG_USEHOSTBUF that has no host buffer
-		if ((nvmgpu_rtn->flags & UVM_NVMGPU_FLAG_USEHOSTBUF) && !va_block->nvmgpu_use_uvm_buffer)
-			uvm_nvmgpu_block_set_file_dirty(va_block);
+		// Force direct flush into the file for UVM_UXU_FLAG_USEHOSTBUF that has no host buffer
+		if ((uxu_rtn->flags & UVM_UXU_FLAG_USEHOSTBUF) && !va_block->uxu_use_uvm_buffer)
+			uvm_uxu_block_set_file_dirty(va_block);
 
 		uvm_mutex_lock(&va_block->lock);
 		// Move data resided on the GPU to host.
-		// Data is automatically moved to the file if UVM_NVMGPU_FLAG_USEHOSTBUF is unset.
+		// Data is automatically moved to the file if UVM_UXU_FLAG_USEHOSTBUF is unset.
 		status = uvm_va_block_migrate_locked(va_block, NULL, block_context, region, UVM_ID_CPU, UVM_MIGRATE_MODE_MAKE_RESIDENT, NULL);
 		uvm_mutex_unlock(&va_block->lock);
 
@@ -811,8 +811,8 @@ uvm_nvmgpu_flush_block(uvm_va_block_t *va_block)
 	}
 
 	// Flush the data kept in the host memory
-	if ((nvmgpu_rtn->flags & UVM_NVMGPU_FLAG_USEHOSTBUF) && va_block->nvmgpu_use_uvm_buffer) {
-		status = uvm_nvmgpu_flush_host_block(va_space, va_range, va_block, false, NULL);
+	if ((uxu_rtn->flags & UVM_UXU_FLAG_USEHOSTBUF) && va_block->uxu_use_uvm_buffer) {
+		status = uvm_uxu_flush_host_block(va_space, va_range, va_block, false, NULL);
 		if (status != NV_OK) {
 			printk(KERN_DEBUG "CANNOT FLUSH HOST BLOCK\n");
 			return status;
@@ -830,15 +830,15 @@ uvm_nvmgpu_flush_block(uvm_va_block_t *va_block)
  * @return: NV_OK on success. NV_ERR_* otherwise.
  */
 NV_STATUS
-uvm_nvmgpu_flush(uvm_va_range_t *va_range)
+uvm_uxu_flush(uvm_va_range_t *va_range)
 {
 	NV_STATUS	status = NV_OK;
 	uvm_va_block_t	*va_block, *va_block_next;
 
 	// Evict blocks one by one.
 	for_each_va_block_in_va_range_safe(va_range, va_block, va_block_next) {
-		if ((status = uvm_nvmgpu_flush_block(va_block)) != NV_OK) {
-			printk(KERN_DEBUG "Encountered a problem with uvm_nvmgpu_flush_block\n");
+		if ((status = uvm_uxu_flush_block(va_block)) != NV_OK) {
+			printk(KERN_DEBUG "Encountered a problem with uvm_uxu_flush_block\n");
 			break;
 		}
 	}
@@ -854,7 +854,7 @@ uvm_nvmgpu_flush(uvm_va_range_t *va_range)
  * @return: always NV_OK;
  */
 NV_STATUS
-uvm_nvmgpu_release_block(uvm_va_block_t *va_block)
+uvm_uxu_release_block(uvm_va_block_t *va_block)
 {
 	uvm_va_block_t	*old;
 	size_t	index;
@@ -874,7 +874,7 @@ uvm_nvmgpu_release_block(uvm_va_block_t *va_block)
 
 	// Free the block.
 	if (old == va_block) {
-		uvm_nvmgpu_block_clear_has_data(va_block);
+		uvm_uxu_block_clear_has_data(va_block);
 		uvm_va_block_kill(va_block);
 	}
 
@@ -882,13 +882,13 @@ uvm_nvmgpu_release_block(uvm_va_block_t *va_block)
 }
 
 NV_STATUS
-uvm_nvmgpu_prepare_block_for_hostbuf(uvm_va_block_t *va_block)
+uvm_uxu_prepare_block_for_hostbuf(uvm_va_block_t *va_block)
 {
 	int	page_id;
-	if (!va_block->nvmgpu_use_uvm_buffer) {
+	if (!va_block->uxu_use_uvm_buffer) {
 		for (page_id = 0; page_id < PAGES_PER_UVM_VA_BLOCK; ++page_id) {
 			if (va_block->cpu.pages[page_id] != NULL) {
-				uvm_nvmgpu_unmap_page(va_block, page_id);
+				uvm_uxu_unmap_page(va_block, page_id);
 				va_block->cpu.pages[page_id] = NULL;
 			}
 		}
@@ -897,20 +897,20 @@ uvm_nvmgpu_prepare_block_for_hostbuf(uvm_va_block_t *va_block)
 }
 
 NV_STATUS
-uvm_nvmgpu_write_begin(uvm_va_block_t *va_block, bool is_flush)
+uvm_uxu_write_begin(uvm_va_block_t *va_block, bool is_flush)
 {
 	NV_STATUS	status = NV_OK;
 
 	int	page_id;
-	uvm_nvmgpu_range_tree_node_t	*nvmgpu_rtn = &va_block->va_range->node.nvmgpu_rtn;
+	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_block->va_range->node.uxu_rtn;
 
 	// Calculate the file offset based on the block start address.
 	loff_t	file_start_offset = va_block->start - va_block->va_range->node.start;
 	loff_t	file_position;
 
-	struct file	*nvmgpu_file = nvmgpu_rtn->filp;
-	struct inode	*f_inode = file_inode(nvmgpu_file);
-	struct address_space	*mapping = nvmgpu_file->f_mapping;
+	struct file	*uxu_file = uxu_rtn->filp;
+	struct inode	*f_inode = file_inode(uxu_file);
+	struct address_space	*mapping = uxu_file->f_mapping;
 	struct inode	*m_inode = mapping->host;
 	const struct address_space_operations	*a_ops = mapping->a_ops;
 
@@ -927,9 +927,9 @@ uvm_nvmgpu_write_begin(uvm_va_block_t *va_block, bool is_flush)
 
 	current->backing_dev_info = inode_to_bdi(m_inode);
 
-	file_remove_privs(nvmgpu_file);
+	file_remove_privs(uxu_file);
 
-	file_update_time(nvmgpu_file);
+	file_update_time(uxu_file);
 
 	for_each_va_block_page(page_id, va_block) {
 		uvm_gpu_id_t id;
@@ -937,11 +937,11 @@ uvm_nvmgpu_write_begin(uvm_va_block_t *va_block, bool is_flush)
 
 		file_position = file_start_offset + page_id * PAGE_SIZE;
 
-		if (file_position >= nvmgpu_rtn->size)
+		if (file_position >= uxu_rtn->size)
 			break;
 
-		f_status = a_ops->write_begin(nvmgpu_file, mapping, file_position,
-					      MIN(PAGE_SIZE, nvmgpu_rtn->size - file_position), 0, &page, &fsdata);
+		f_status = a_ops->write_begin(uxu_file, mapping, file_position,
+					      MIN(PAGE_SIZE, uxu_rtn->size - file_position), 0, &page, &fsdata);
 
 		if (f_status != 0 || page == NULL)
 			continue;
@@ -952,7 +952,7 @@ uvm_nvmgpu_write_begin(uvm_va_block_t *va_block, bool is_flush)
 		fsdata_array[page_id] = fsdata;
 
 		if (va_block->cpu.pages[page_id] != NULL)
-			uvm_nvmgpu_unmap_page(va_block, page_id);
+			uvm_uxu_unmap_page(va_block, page_id);
 
 		for_each_gpu_id(id) {
 			uvm_gpu_t *gpu;
@@ -994,14 +994,14 @@ uvm_nvmgpu_write_begin(uvm_va_block_t *va_block, bool is_flush)
 }
 
 NV_STATUS
-uvm_nvmgpu_write_end(uvm_va_block_t *va_block, bool is_flush)
+uvm_uxu_write_end(uvm_va_block_t *va_block, bool is_flush)
 {
 	NV_STATUS	status = NV_OK;
 
-	uvm_nvmgpu_range_tree_node_t	*nvmgpu_rtn = &va_block->va_range->node.nvmgpu_rtn;
-	struct file	*nvmgpu_file = nvmgpu_rtn->filp;
-	struct inode	*f_inode = file_inode(nvmgpu_file);
-	struct address_space	*mapping = nvmgpu_file->f_mapping;
+	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_block->va_range->node.uxu_rtn;
+	struct file	*uxu_file = uxu_rtn->filp;
+	struct inode	*f_inode = file_inode(uxu_file);
+	struct address_space	*mapping = uxu_file->f_mapping;
 	const struct address_space_operations	*a_ops = mapping->a_ops;
 
 	int	page_id;
@@ -1015,23 +1015,23 @@ uvm_nvmgpu_write_end(uvm_va_block_t *va_block, bool is_flush)
 
 		file_position = file_start_offset + page_id * PAGE_SIZE;
 
-		if (file_position >= nvmgpu_rtn->size)
+		if (file_position >= uxu_rtn->size)
 			break;
 
 		if (page) {
-			size_t bytes = MIN(PAGE_SIZE, nvmgpu_rtn->size - file_position);
+			size_t bytes = MIN(PAGE_SIZE, uxu_rtn->size - file_position);
 			flush_dcache_page(page);
 			mark_page_accessed(page);
 
-			a_ops->write_end(nvmgpu_file, mapping, file_position, bytes,
+			a_ops->write_end(uxu_file, mapping, file_position, bytes,
 					 bytes, page, fsdata);
 
 			balance_dirty_pages_ratelimited(mapping);
 		}
 	}
 
-	uvm_nvmgpu_block_set_has_data(va_block);
-	uvm_nvmgpu_block_set_file_dirty(va_block);
+	uvm_uxu_block_set_has_data(va_block);
+	uvm_uxu_block_set_file_dirty(va_block);
 
 	current->backing_dev_info = NULL;
 
@@ -1049,14 +1049,14 @@ uvm_nvmgpu_write_end(uvm_va_block_t *va_block, bool is_flush)
  * @return: NV_OK on success, NV_ERR_* otherwise.
  */
 NV_STATUS
-uvm_nvmgpu_reduce_memory_consumption(uvm_va_space_t *va_space)
+uvm_uxu_reduce_memory_consumption(uvm_va_space_t *va_space)
 {
 	/*
 	 * TODO: locking assertion failed. write lock is required.
 	 */
 	NV_STATUS	status = NV_OK;
 
-	uvm_nvmgpu_va_space_t	*nvmgpu_va_space = &va_space->nvmgpu_va_space;
+	uvm_uxu_va_space_t	*uxu_va_space = &va_space->uxu_va_space;
 
 	unsigned long	counter = 0;
 
@@ -1066,10 +1066,10 @@ uvm_nvmgpu_reduce_memory_consumption(uvm_va_space_t *va_space)
 	uvm_va_space_down_write(va_space);
 	// Reclaim blocks based on least recent transfer.
 
-	list_for_each_safe(lp, next, &nvmgpu_va_space->lru_head) {
-		if (counter >= nvmgpu_va_space->trash_nr_blocks)
+	list_for_each_safe(lp, next, &uxu_va_space->lru_head) {
+		if (counter >= uxu_va_space->trash_nr_blocks)
 			break;
-		va_block = list_entry(lp, uvm_va_block_t, nvmgpu_lru);
+		va_block = list_entry(lp, uvm_va_block_t, uxu_lru);
 
 		// Terminate the loop since we cannot trash out blocks that have a copy on GPU
 		if (uvm_processor_mask_get_gpu_count(&(va_block->resident)) > 0) {
@@ -1077,20 +1077,20 @@ uvm_nvmgpu_reduce_memory_consumption(uvm_va_space_t *va_space)
 			continue;
 		}
 		// Evict the block if it is on CPU only and this `va_range` has the write flag.
-		if (uvm_processor_mask_get_count(&(va_block->resident)) > 0 && va_block->va_range->node.nvmgpu_rtn.flags & UVM_NVMGPU_FLAG_WRITE) {
-			status = uvm_nvmgpu_flush_host_block(va_block->va_range->va_space, va_block->va_range, va_block, true, NULL);
+		if (uvm_processor_mask_get_count(&(va_block->resident)) > 0 && va_block->va_range->node.uxu_rtn.flags & UVM_UXU_FLAG_WRITE) {
+			status = uvm_uxu_flush_host_block(va_block->va_range->va_space, va_block->va_range, va_block, true, NULL);
 			if (status != NV_OK) {
 				printk(KERN_DEBUG "Cannot evict block\n");
 				continue;
 			}
 		}
 
-		uvm_mutex_lock(&nvmgpu_va_space->lock_blocks);
+		uvm_mutex_lock(&uxu_va_space->lock_blocks);
 		// Remove this block from the list and release it.
-		list_del_init(&va_block->nvmgpu_lru);
-		uvm_mutex_unlock(&nvmgpu_va_space->lock_blocks);
+		list_del_init(&va_block->uxu_lru);
+		uvm_mutex_unlock(&uxu_va_space->lock_blocks);
 
-		uvm_nvmgpu_release_block(va_block);
+		uvm_uxu_release_block(va_block);
 		++counter;
 	}
 
@@ -1113,11 +1113,11 @@ uvm_nvmgpu_reduce_memory_consumption(uvm_va_space_t *va_space)
  * @return: NV_OK on success. NV_ERR_* otherwise.
  */
 NV_STATUS
-uvm_nvmgpu_flush_host_block(uvm_va_space_t *va_space, uvm_va_range_t *va_range, uvm_va_block_t *va_block, bool is_evict, const uvm_page_mask_t *page_mask)
+uvm_uxu_flush_host_block(uvm_va_space_t *va_space, uvm_va_range_t *va_range, uvm_va_block_t *va_block, bool is_evict, const uvm_page_mask_t *page_mask)
 {
 	NV_STATUS	status = NV_OK;
 
-	struct file	*nvmgpu_file = va_range->node.nvmgpu_rtn.filp;
+	struct file	*uxu_file = va_range->node.uxu_rtn.filp;
 	mm_segment_t	fs;
 
 	int	page_id, prev_page_id;
@@ -1127,7 +1127,7 @@ uvm_nvmgpu_flush_host_block(uvm_va_space_t *va_space, uvm_va_range_t *va_range, 
 	loff_t	offset;
 
 	struct kiocb	kiocb;
-	struct iovec	*iov = va_range->node.nvmgpu_rtn.iov;
+	struct iovec	*iov = va_range->node.uxu_rtn.iov;
 	struct iov_iter	iter;
 	unsigned int	iov_index = 0;
 	ssize_t	_ret;
@@ -1138,7 +1138,7 @@ uvm_nvmgpu_flush_host_block(uvm_va_space_t *va_space, uvm_va_range_t *va_range, 
 
 	uvm_page_mask_t	mask;
 
-	UVM_ASSERT(nvmgpu_file != NULL);
+	UVM_ASSERT(uxu_file != NULL);
 
 	if (!page_mask)
 		uvm_page_mask_fill(&mask);
@@ -1160,10 +1160,10 @@ uvm_nvmgpu_flush_host_block(uvm_va_space_t *va_space, uvm_va_range_t *va_range, 
 
 		// Perform asynchronous write.
 		if (page_id - 1 != prev_page_id && iov_index > 0) {
-			init_sync_kiocb(&kiocb, nvmgpu_file);
+			init_sync_kiocb(&kiocb, uxu_file);
 			kiocb.ki_pos = offset;
 			iov_iter_init(&iter, WRITE, iov, iov_index, iov_index * PAGE_SIZE);
-			_ret = call_write_iter(nvmgpu_file, &kiocb, &iter);
+			_ret = call_write_iter(uxu_file, &kiocb, &iter);
 			BUG_ON(_ret == -EIOCBQUEUED);
 
 			iov_index = 0;
@@ -1177,15 +1177,15 @@ uvm_nvmgpu_flush_host_block(uvm_va_space_t *va_space, uvm_va_range_t *va_range, 
 
 	// Start asynchronous write.
 	if (iov_index > 0) {
-		init_sync_kiocb(&kiocb, nvmgpu_file);
+		init_sync_kiocb(&kiocb, uxu_file);
 		kiocb.ki_pos = offset;
 		iov_iter_init(&iter, WRITE, iov, iov_index, iov_index * PAGE_SIZE);
-		_ret = call_write_iter(nvmgpu_file, &kiocb, &iter);
+		_ret = call_write_iter(uxu_file, &kiocb, &iter);
 		BUG_ON(_ret == -EIOCBQUEUED);
 	}
 
 	// Mark that this block has dirty data on the file.
-	uvm_nvmgpu_block_set_file_dirty(va_block);
+	uvm_uxu_block_set_file_dirty(va_block);
 
 	// Switch back to the original space.
 	set_fs(fs);
@@ -1194,7 +1194,7 @@ uvm_nvmgpu_flush_host_block(uvm_va_space_t *va_space, uvm_va_range_t *va_range, 
 }
 
 void
-uvm_nvmgpu_set_page_dirty(struct page *page)
+uvm_uxu_set_page_dirty(struct page *page)
 {
 	/* Ugly, but we have no way to safely set dirty */
 	int *p = (int *)page_to_virt(page);

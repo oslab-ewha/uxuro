@@ -2836,10 +2836,10 @@ NV_STATUS uvm8_test_get_gpu_time(UVM_TEST_GET_GPU_TIME_PARAMS *params, struct fi
     return status;
 }
 
-NV_STATUS uvm_api_nvmgpu_initialize(UVM_NVMGPU_INITIALIZE_PARAMS *params, struct file *filp)
+NV_STATUS uvm_api_uxu_initialize(UVM_UXU_INITIALIZE_PARAMS *params, struct file *filp)
 {
     uvm_va_space_t *va_space = uvm_va_space_get(filp);
-    return uvm_nvmgpu_initialize(
+    return uvm_uxu_initialize(
         va_space,
         params->trash_nr_blocks,
         params->trash_reserved_nr_pages,
@@ -2849,18 +2849,18 @@ NV_STATUS uvm_api_nvmgpu_initialize(UVM_NVMGPU_INITIALIZE_PARAMS *params, struct
 
 #include <linux/mman.h>
 
-NV_STATUS uvm_api_nvmgpu_register_file_va_space(UVM_NVMGPU_REGISTER_FILE_VA_SPACE_PARAMS *params, struct file *filp)
+NV_STATUS uvm_api_uxu_register_file_va_space(UVM_UXU_REGISTER_FILE_VA_SPACE_PARAMS *params, struct file *filp)
 {
     uvm_va_space_t *va_space = uvm_va_space_get(filp);
 
     /* TODO: need check private data of dragon file */
 
-    va_space->nvmgpu_va_space.fd_pending = params->backing_fd;
-    return uvm_nvmgpu_register_file_va_space(va_space, params);
+    va_space->uxu_va_space.fd_pending = params->backing_fd;
+    return uvm_uxu_register_file_va_space(va_space, params);
 }
 
-NV_STATUS uvm_api_nvmgpu_remap(UVM_NVMGPU_REMAP_PARAMS *params, struct file *filp)
+NV_STATUS uvm_api_uxu_remap(UVM_UXU_REMAP_PARAMS *params, struct file *filp)
 {
     uvm_va_space_t *va_space = uvm_va_space_get(filp);
-    return uvm_nvmgpu_remap(va_space, params);
+    return uvm_uxu_remap(va_space, params);
 }
