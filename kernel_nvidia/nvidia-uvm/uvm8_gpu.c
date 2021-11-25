@@ -42,7 +42,7 @@
 #include "uvm8_gpu_access_counters.h"
 #include "uvm8_test.h"
 
-#include "uvm8_nvmgpu.h"
+#include "uvm8_uxu.h"
 
 #define UVM_PROC_GPUS_PEER_DIR_NAME "peers"
 

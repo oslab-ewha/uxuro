@@ -38,7 +38,7 @@
 #include "uvm8_mem.h"
 #include "uvm8_gpu_access_counters.h"
 #include "uvm8_test_ioctl.h"
-#include "uvm8_nvmgpu.h"
+#include "uvm8_uxu.h"
 
 typedef enum
 {

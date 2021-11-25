@@ -35,7 +35,7 @@
 #include "uvm_linux_ioctl.h"
 #include "uvm8_hmm.h"
 #include "uvm8_mem.h"
-#include "uvm8_nvmgpu.h"
+#include "uvm8_uxu.h"
 
 #define NVIDIA_UVM_DEVICE_NAME          "nvidia-uvm"
 

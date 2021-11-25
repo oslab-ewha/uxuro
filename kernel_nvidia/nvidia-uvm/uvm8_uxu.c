@@ -33,7 +33,7 @@
 #include "uvm8_perf_thrashing.h"
 #include "uvm8_perf_prefetch.h"
 #include "uvm8_mem.h"
-#include "uvm8_nvmgpu.h"
+#include "uvm8_uxu.h"
 
 #define MIN(x,y) (x < y ? x : y)
 

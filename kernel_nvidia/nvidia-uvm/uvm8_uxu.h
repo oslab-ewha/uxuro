@@ -1,5 +1,5 @@
-#ifndef __UVM8_NVMGPU_H__
-#define __UVM8_NVMGPU_H__
+#ifndef __UVM8_UXU_H__
+#define __UVM8_UXU_H__
 
 #include "uvm8_va_space.h"
 #include "uvm8_va_range.h"

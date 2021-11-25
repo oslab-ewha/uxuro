@@ -40,7 +40,7 @@
 #include "uvm_common.h"
 #include "nv_uvm_interface.h"
 #include "nv-kthread-q.h"
-#include "uvm8_nvmgpu.h"
+#include "uvm8_uxu.h"
 
 static bool processor_mask_array_test(const uvm_processor_mask_t *mask,
                                       uvm_processor_id_t mask_id,
