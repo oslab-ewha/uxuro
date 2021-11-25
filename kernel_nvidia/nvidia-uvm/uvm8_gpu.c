@@ -2840,7 +2840,7 @@ NV_STATUS uvm_api_nvmgpu_initialize(UVM_NVMGPU_INITIALIZE_PARAMS *params, struct
 {
     uvm_va_space_t *va_space = uvm_va_space_get(filp);
     return uvm_nvmgpu_initialize(
-        va_space, 
+        va_space,
         params->trash_nr_blocks,
         params->trash_reserved_nr_pages,
         params->flags
@@ -2864,4 +2864,3 @@ NV_STATUS uvm_api_nvmgpu_remap(UVM_NVMGPU_REMAP_PARAMS *params, struct file *fil
     uvm_va_space_t *va_space = uvm_va_space_get(filp);
     return uvm_nvmgpu_remap(va_space, params);
 }
-

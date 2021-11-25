@@ -35,7 +35,7 @@ typedef struct uvm_nvmgpu_range_tree_node_t
     unsigned long *is_file_dirty_bitmaps;
     unsigned long *has_data_bitmaps;
     struct iovec *iov;
-} uvm_nvmgpu_range_tree_node_t; 
+} uvm_nvmgpu_range_tree_node_t;
 
 // Tree-based data structure for looking up and iterating over objects with
 // provided [start, end] ranges. The ranges are not allowed to overlap.

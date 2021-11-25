@@ -346,8 +346,8 @@ struct uvm_va_block_struct
         uvm_page_mask_t resident;
 
         // mask for page caches which should be released via put_page()
-        uvm_page_mask_t pagecached;	
-	    
+        uvm_page_mask_t pagecached;
+
         // Per-page array of physical pages. This array scales dynamically with
         // the block size.
         //

@@ -187,7 +187,7 @@ uvm_nvmgpu_register_file_va_space(uvm_va_space_t *va_space, UVM_NVMGPU_REGISTER_
 		goto _register_err_2;
 	}
 
-	return NV_OK; 
+	return NV_OK;
 
 	// Found an error. Free allocated memory before go out.
 _register_err_2:
@@ -730,7 +730,7 @@ uvm_nvmgpu_read_begin(uvm_va_block_t *va_block, uvm_va_block_retry_t *block_retr
 read_begin_err_0:
 	// Put back the original mask.
 	uvm_page_mask_copy(&service_context->block_context.make_resident.page_mask, &original_page_mask);
-    
+
 	return status;
 }
 
@@ -758,9 +758,9 @@ uvm_nvmgpu_read_end(uvm_va_block_t *va_block)
 
 /**
  * Evict out the block. This function can handle both CPU-only and GPU blocks.
- * 
+ *
  * @param va_block: the block to be evicted.
- * 
+ *
  * @return: NV_OK on success. NV_ERR_* otherwise.
  */
 NV_STATUS
@@ -823,7 +823,7 @@ uvm_nvmgpu_flush_block(uvm_va_block_t *va_block)
 }
 
 /**
- * Flush all blocks in the `va_range`. 
+ * Flush all blocks in the `va_range`.
  *
  * @param va_range: va_range that we want to flush the data.
  *
@@ -850,7 +850,7 @@ uvm_nvmgpu_flush(uvm_va_range_t *va_range)
  * Free memory associated with the `va_block`.
  *
  * @param va_block: va_block to be freed.
- * 
+ *
  * @return: always NV_OK;
  */
 NV_STATUS
@@ -858,7 +858,7 @@ uvm_nvmgpu_release_block(uvm_va_block_t *va_block)
 {
 	uvm_va_block_t	*old;
 	size_t	index;
-    
+  
 	uvm_va_range_t	*va_range = va_block->va_range;
 
 	UVM_ASSERT(va_block != NULL);
@@ -942,7 +942,7 @@ uvm_nvmgpu_write_begin(uvm_va_block_t *va_block, bool is_flush)
 
 		f_status = a_ops->write_begin(nvmgpu_file, mapping, file_position,
 					      MIN(PAGE_SIZE, nvmgpu_rtn->size - file_position), 0, &page, &fsdata);
-        
+
 		if (f_status != 0 || page == NULL)
 			continue;
 
@@ -1023,7 +1023,7 @@ uvm_nvmgpu_write_end(uvm_va_block_t *va_block, bool is_flush)
 			flush_dcache_page(page);
 			mark_page_accessed(page);
 
-			a_ops->write_end(nvmgpu_file, mapping, file_position, bytes, 
+			a_ops->write_end(nvmgpu_file, mapping, file_position, bytes,
 					 bytes, page, fsdata);
 
 			balance_dirty_pages_ratelimited(mapping);
@@ -1042,7 +1042,7 @@ uvm_nvmgpu_write_end(uvm_va_block_t *va_block, bool is_flush)
 
 /**
  * Automatically reduce memory usage if we need to.
- * 
+ *
  * @param va_space: va_space that governs this operation.
  * @param force: if true, we will evict some blocks without checking for the memory pressure.
  *
@@ -1102,7 +1102,7 @@ uvm_nvmgpu_reduce_memory_consumption(uvm_va_space_t *va_space)
 /**
  * Write the data of this `va_block` to the file.
  * Callers have to make sure that there is no duplicated data on GPU.
- * 
+ *
  * @param va_space: va_space that governs this operation.
  * @param va_range: UVM va_range.
  * @param va_block: the data source.

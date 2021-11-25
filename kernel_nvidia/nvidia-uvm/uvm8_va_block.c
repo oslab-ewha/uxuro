@@ -2895,7 +2895,7 @@ static NV_STATUS block_copy_resident_pages(uvm_va_block_t *block,
      * A kernel panic occurs when copy with UVM_NVMGPU_FLAG_READ is skipped.
      */
     if (!uvm_nvmgpu_is_managed(block->va_range)
-        || (cause != UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && cause != UVM_MAKE_RESIDENT_CAUSE_NVMGPU) 
+        || (cause != UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && cause != UVM_MAKE_RESIDENT_CAUSE_NVMGPU)
         || (cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && UVM_ID_IS_CPU(dst_id) && uvm_nvmgpu_need_to_evict_from_gpu(block))
         || (cause == UVM_MAKE_RESIDENT_CAUSE_NVMGPU && UVM_ID_IS_GPU(dst_id))
     ) {
@@ -3028,8 +3028,8 @@ NV_STATUS uvm_va_block_make_resident(uvm_va_block_t *va_block,
 
     if (uvm_nvmgpu_is_managed(va_range)
         && uvm_nvmgpu_need_to_evict_from_gpu(va_block)
-        && (cause == UVM_MAKE_RESIDENT_CAUSE_EVICTION 
-            || (cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && UVM_ID_IS_CPU(dest_id))) 
+        && (cause == UVM_MAKE_RESIDENT_CAUSE_EVICTION
+            || (cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && UVM_ID_IS_CPU(dest_id)))
     ) {
         uvm_nvmgpu_range_tree_node_t *nvmgpu_rtn = &va_block->va_range->node.nvmgpu_rtn;
 
@@ -9638,7 +9638,7 @@ NV_STATUS uvm_va_block_service_locked(uvm_processor_id_t processor_id,
                 do_nvmgpu_read = true;
             }
 
-            if (uvm_nvmgpu_is_managed(va_block->va_range) 
+            if (uvm_nvmgpu_is_managed(va_block->va_range)
                 && (va_block->nvmgpu_use_uvm_buffer)
             )
                 uvm_nvmgpu_block_mark_recent_in_buffer(va_block);

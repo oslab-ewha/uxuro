@@ -49,9 +49,9 @@ typedef struct uvm_nvmgpu_va_space_t
     bool is_initailized;
 
     // number of blocks to be trashed at a time
-    unsigned long trash_nr_blocks; 
-    // number of pages reserved for the system 
-    unsigned long trash_reserved_nr_pages; 
+    unsigned long trash_nr_blocks;
+    // number of pages reserved for the system
+    unsigned long trash_reserved_nr_pages;
     // init flags that dictate the optimization behaviors
     unsigned short flags;
 

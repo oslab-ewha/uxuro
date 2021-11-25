@@ -1092,7 +1092,7 @@ typedef struct
     size_t          size;               // IN
     unsigned short  flags;              // IN
     NV_STATUS       rmStatus;           // OUT
-} UVM_NVMGPU_REMAP_PARAMS;                          
+} UVM_NVMGPU_REMAP_PARAMS;
 
 //
 // Temporary ioctls which should be removed before UVM 8 release
