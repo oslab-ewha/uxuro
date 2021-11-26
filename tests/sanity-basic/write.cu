@@ -52,7 +52,7 @@ main(int argc, char *argv[])
 	CUDA_CALL_SAFE(cudaEventCreate(&stop_event));
 
 	init_tickcount();
-	if (uxu_map(argv[1], total_size, D_F_WRITE | D_F_CREATE, (void **)(&g_buf)) != D_OK)
+	if (uxu_map(argv[1], total_size, UXU_FLAGS_WRITE | UXU_FLAGS_CREATE, (void **)(&g_buf)) != UXU_OK)
 		return EXIT_FAILURE;
 	map_time = get_tickcount();
 
@@ -66,7 +66,7 @@ main(int argc, char *argv[])
 	CUDA_CALL_SAFE(cudaDeviceSynchronize());
 
 	init_tickcount();
-	if (uxu_unmap(g_buf) != D_OK)
+	if (uxu_unmap(g_buf) != UXU_OK)
 		return EXIT_FAILURE;
 	free_time = get_tickcount();
 

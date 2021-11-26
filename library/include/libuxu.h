@@ -4,22 +4,22 @@
 #include <stdio.h>
 
 /* Flags for uxu_map */
-#define D_F_READ        0x01
-#define D_F_WRITE       0x02
-#define D_F_CREATE      0x04
-#define D_F_DONTTRASH   0x08
-#define D_F_VOLATILE    0x10
-#define D_F_USEHOSTBUF  0x20
+#define UXU_FLAGS_READ		0x01
+#define UXU_FLAGS_WRITE		0x02
+#define UXU_FLAGS_CREATE	0x04
+#define UXU_FLAGS_DONTTRASH	0x08
+#define UXU_FLAGS_VOLATILE	0x10
+#define UXU_FLAGS_USEHOSTBUF	0x20
 
 /* Errors */
 typedef enum {
-	D_OK = 0,
-	D_ERR_FILE,
-	D_ERR_IOCTL,
-	D_ERR_UVM,
-	D_ERR_INTVAL,
-	D_ERR_MEM,
-	D_ERR_NOT_IMPLEMENTED
+	UXU_OK = 0,
+	UXU_ERR_FILE,
+	UXU_ERR_IOCTL,
+	UXU_ERR_UVM,
+	UXU_ERR_INTVAL,
+	UXU_ERR_MEM,
+	UXU_ERR_NOT_IMPLEMENTED
 } uxu_err_t;
 
 #ifdef __cplusplus

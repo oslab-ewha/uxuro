@@ -196,20 +196,20 @@ static cuio_ptr_t
 mmap_by_uxu(const char *fpath, size_t len, cuio_mode_t mode)
 {
 	cuio_ptr_t	ptr;
-	int	flags = D_F_READ;
+	int	flags = UXU_FLAGS_READ;
 
 	switch (mode) {
 	case CUIO_MODE_READONLY:
-		flags |= D_F_DONTTRASH;
+		flags |= UXU_FLAGS_DONTTRASH;
 		break;
 	case CUIO_MODE_READWRITE:
-		flags |= (D_F_WRITE | D_F_DONTTRASH);
+		flags |= (UXU_FLAGS_WRITE | UXU_FLAGS_DONTTRASH);
 		break;
 	case CUIO_MODE_WRITEONLY:
-		flags |= (D_F_WRITE | D_F_CREATE | D_F_VOLATILE);
+		flags |= (UXU_FLAGS_WRITE | UXU_FLAGS_CREATE | UXU_FLAGS_VOLATILE);
 		break;
 	}
-	if (uxu_map(fpath, len, flags, (void **)&ptr.ptr_h) != D_OK) {
+	if (uxu_map(fpath, len, flags, (void **)&ptr.ptr_h) != UXU_OK) {
 		fprintf(stderr, "Cannot uxu_map %s\n", fpath);
 		exit(EXIT_FAILURE);
 	}
@@ -223,7 +223,7 @@ mmap_by_uxu(const char *fpath, size_t len, cuio_mode_t mode)
 static void
 munmap_by_uxu(const char *fpath, cuio_ptr_t *pptr)
 {
-	if (uxu_unmap(pptr->ptr_h) != D_OK) {
+	if (uxu_unmap(pptr->ptr_h) != UXU_OK) {
 		fprintf(stderr, "Cannot uxu_unmap: %s\n", fpath);
 		exit(EXIT_FAILURE);
 	}

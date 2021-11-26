@@ -20,27 +20,27 @@
 
 #define PSF_DIR		"/proc/self/fd"
 #define NVIDIA_UVM_PATH	"/dev/nvidia-uvm"
-#define DRAGON_IOCTL_INIT			1000
-#define DRAGON_IOCTL_MAP			1001
-#define DRAGON_IOCTL_TRASH_NRBLOCKS		1002
-#define DRAGON_IOCTL_TRASH_RESERVED_NRPAGES	1003
-#define DRAGON_IOCTL_REMAP			1004
+#define UXU_IOCTL_INIT				1000
+#define UXU_IOCTL_MAP				1001
+#define UXU_IOCTL_TRASH_NRBLOCKS		1002
+#define UXU_IOCTL_TRASH_RESERVED_NRPAGES	1003
+#define UXU_IOCTL_REMAP				1004
 
 #define MIN_SIZE			((size_t)1 << 21)
 #define DEFAULT_TRASH_NR_BLOCKS		32
 #define DEFAULT_TRASH_NR_RESERVED_PAGES	(((unsigned long)1 << 21) * 4)
 
-#define DRAGON_ENVNAME_ENABLE_READ_CACHE	"DRAGON_ENABLE_READ_CACHE"
-#define DRAGON_ENVNAME_ENABLE_LAZY_WRITE	"DRAGON_ENABLE_LAZY_WRITE"
-#define DRAGON_ENVNAME_ENABLE_AIO_READ		"DRAGON_ENABLE_AIO_READ"
-#define DRAGON_ENVNAME_ENABLE_AIO_WRITE		"DRAGON_ENABLE_AIO_WRITE"
-#define DRAGON_ENVNAME_READAHEAD_TYPE		"DRAGON_READAHEAD_TYPE"
-#define DRAGON_ENVNAME_NR_RESERVED_PAGES	"DRAGON_NR_RESERVED_PAGES"
+#define UXU_ENVNAME_ENABLE_READ_CACHE	"UXU_ENABLE_READ_CACHE"
+#define UXU_ENVNAME_ENABLE_LAZY_WRITE	"UXU_ENABLE_LAZY_WRITE"
+#define UXU_ENVNAME_ENABLE_AIO_READ	"UXU_ENABLE_AIO_READ"
+#define UXU_ENVNAME_ENABLE_AIO_WRITE	"UXU_ENABLE_AIO_WRITE"
+#define UXU_ENVNAME_READAHEAD_TYPE	"UXU_READAHEAD_TYPE"
+#define UXU_ENVNAME_NR_RESERVED_PAGES	"UXU_NR_RESERVED_PAGES"
 
-#define DRAGON_INIT_FLAG_ENABLE_READ_CACHE	0x01
-#define DRAGON_INIT_FLAG_ENABLE_LAZY_WRITE	0x02
-#define DRAGON_INIT_FLAG_ENABLE_AIO_READ	0x04
-#define DRAGON_INIT_FLAG_ENABLE_AIO_WRITE	0x08
+#define UXU_INIT_FLAG_ENABLE_READ_CACHE	0x01
+#define UXU_INIT_FLAG_ENABLE_LAZY_WRITE	0x02
+#define UXU_INIT_FLAG_ENABLE_AIO_READ	0x04
+#define UXU_INIT_FLAG_ENABLE_AIO_WRITE	0x08
 
 static int	fadvice = -1;
 static int	fd_uvm = -1;
@@ -88,10 +88,10 @@ try_to_init_uvm(void)
 	error = cudaMallocManaged(&addr, 1, cudaMemAttachGlobal);
 	if (error != cudaSuccess) {
 		fprintf(stderr, "failed to cudaMallocManaged: %s %s\n", cudaGetErrorName(error), cudaGetErrorString(error));
-		return D_ERR_UVM;
+		return UXU_ERR_UVM;
 	}
 	cudaFree(addr);
-	return D_OK;
+	return UXU_OK;
 }
 
 static uxu_err_t
@@ -99,11 +99,11 @@ setup_fd_uvm(void)
 {
 	DIR	*dir;
 	struct dirent	*ent;
-	uxu_err_t	err = D_ERR_FILE;
+	uxu_err_t	err = UXU_ERR_FILE;
 
 	dir = opendir(PSF_DIR);
 	if (dir == NULL)
-		return D_ERR_FILE;
+		return UXU_ERR_FILE;
 
 	while ((ent = readdir(dir)) != NULL) {
 		char	*psf_path, *psf_realpath;
@@ -123,7 +123,7 @@ setup_fd_uvm(void)
 			fd_uvm = atoi(ent->d_name);
 		free(psf_realpath);
 		if (fd_uvm >= 0) {
-			err = D_OK;
+			err = UXU_OK;
 			break;
 		}
 	}
@@ -144,23 +144,23 @@ init_module(void)
 
 	addr_map = g_hash_table_new(NULL, NULL);
 
-	if (secure_getenv("NO_DRAGON")) {
+	if (secure_getenv("NO_UXU")) {
 		disabled_uxu = 1;
 		initialized = 1;
-		return D_OK;
+		return UXU_OK;
 	}
 
-	if ((err = try_to_init_uvm()) != D_OK) {
+	if ((err = try_to_init_uvm()) != UXU_OK) {
 		fprintf(stderr, "failed to initialize uxu: %d\n", err);
-		return D_ERR_UVM;
+		return UXU_ERR_UVM;
 	}
 
-	if ((err = setup_fd_uvm()) != D_OK) {
+	if ((err = setup_fd_uvm()) != UXU_OK) {
 		fprintf(stderr, "failed to get uvm fd: %d\n", err);
-		return D_ERR_UVM;
+		return UXU_ERR_UVM;
 	}
 
-	env_val = secure_getenv("DRAGON_MINSIZE");
+	env_val = secure_getenv("UXU_MINSIZE");
 	if (env_val) {
 		sscanf(env_val, "%u", &minsize);
 	}
@@ -169,28 +169,28 @@ init_module(void)
 	request.trash_reserved_nr_pages = DEFAULT_TRASH_NR_RESERVED_PAGES;
 	request.flags = 0;
 
-	env_val = secure_getenv(DRAGON_ENVNAME_NR_RESERVED_PAGES);
+	env_val = secure_getenv(UXU_ENVNAME_NR_RESERVED_PAGES);
 	if (env_val && (nr_pages = strtol(env_val, &endptr, 10)) >= 0) {
 		if (*env_val != '\0' && *endptr == '\0')
 			request.trash_reserved_nr_pages = (unsigned long)nr_pages;
 	}
-	env_val = secure_getenv(DRAGON_ENVNAME_ENABLE_READ_CACHE);
+	env_val = secure_getenv(UXU_ENVNAME_ENABLE_READ_CACHE);
 	if (!(env_val && strncasecmp(env_val, "no", 2) == 0))
-		request.flags |= DRAGON_INIT_FLAG_ENABLE_READ_CACHE;
+		request.flags |= UXU_INIT_FLAG_ENABLE_READ_CACHE;
 
-	env_val = secure_getenv(DRAGON_ENVNAME_ENABLE_LAZY_WRITE);
+	env_val = secure_getenv(UXU_ENVNAME_ENABLE_LAZY_WRITE);
 	if (!(env_val && strncasecmp(env_val, "no", 2) == 0))
-		request.flags |= DRAGON_INIT_FLAG_ENABLE_LAZY_WRITE;
+		request.flags |= UXU_INIT_FLAG_ENABLE_LAZY_WRITE;
 
-	env_val = secure_getenv(DRAGON_ENVNAME_ENABLE_AIO_READ);
+	env_val = secure_getenv(UXU_ENVNAME_ENABLE_AIO_READ);
 	if (!(env_val && strncasecmp(env_val, "no", 2) == 0))
-        request.flags |= DRAGON_INIT_FLAG_ENABLE_AIO_READ;
+        request.flags |= UXU_INIT_FLAG_ENABLE_AIO_READ;
 
-	env_val = secure_getenv(DRAGON_ENVNAME_ENABLE_AIO_WRITE);
+	env_val = secure_getenv(UXU_ENVNAME_ENABLE_AIO_WRITE);
 	if (!(env_val && strncasecmp(env_val, "no", 2) == 0))
-		request.flags |= DRAGON_INIT_FLAG_ENABLE_AIO_WRITE;
+		request.flags |= UXU_INIT_FLAG_ENABLE_AIO_WRITE;
 
-	env_val = secure_getenv(DRAGON_ENVNAME_READAHEAD_TYPE);
+	env_val = secure_getenv(UXU_ENVNAME_READAHEAD_TYPE);
 	if (env_val && strncasecmp(env_val, "agg", 3) == 0) {
 		fadvice = POSIX_FADV_SEQUENTIAL;
 		fprintf(stderr, "Aggressive read ahead is enabled.\n");
@@ -202,10 +202,10 @@ init_module(void)
 	else
 		fadvice = POSIX_FADV_NORMAL;
 
-	if ((status = ioctl(fd_uvm, DRAGON_IOCTL_INIT, &request)) != 0) {
+	if ((status = ioctl(fd_uvm, UXU_IOCTL_INIT, &request)) != 0) {
 		fprintf(stderr, "ioctl init error: %d\n", status);
 		close(fd_uvm);
-		err = D_ERR_IOCTL;
+		err = UXU_ERR_IOCTL;
 	}
 	else {
 		initialized = 1;
@@ -222,8 +222,8 @@ fillup_from_file(uxu_ioctl_map_t *request)
 	size_t	size;
 	unsigned char	*addr;
 
-	if (!(request->flags & D_F_READ))
-		return D_OK;
+	if (!(request->flags & UXU_FLAGS_READ))
+		return UXU_OK;
 
 	addr = (unsigned char *)request->uvm_addr;
 	size = request->size;
@@ -241,7 +241,7 @@ fillup_from_file(uxu_ioctl_map_t *request)
 		size -= nread;
 	}
 
-	return D_OK;
+	return UXU_OK;
 }
 
 static void
@@ -250,7 +250,7 @@ flush_to_file(uxu_ioctl_map_t *request)
 	size_t	size;
 	unsigned char	*addr;
 
-	if (!(request->flags & D_F_WRITE))
+	if (!(request->flags & UXU_FLAGS_WRITE))
 		return;
 
 	addr = (unsigned char *)request->uvm_addr;
@@ -275,18 +275,18 @@ static uxu_err_t
 do_uxu_map(uxu_ioctl_map_t *request)
 {
 	int	status;
-	uxu_err_t	err = D_OK;
+	uxu_err_t	err = UXU_OK;
 
-	if ((request->flags & D_F_READ) && !(request->flags & D_F_VOLATILE)) {
+	if ((request->flags & UXU_FLAGS_READ) && !(request->flags & UXU_FLAGS_VOLATILE)) {
 		if ((status = posix_fadvise(request->backing_fd, 0, 0, fadvice)) != 0)
 			fprintf(stderr, "fadvise error: %d\n", status);
 		if ((fadvice == POSIX_FADV_SEQUENTIAL) && readahead(request->backing_fd, 0, request->size) != 0)
 			fprintf(stderr, "readahead error.\n");
 	}
 
-	if ((status = ioctl(fd_uvm, DRAGON_IOCTL_MAP, request)) != 0) {
+	if ((status = ioctl(fd_uvm, UXU_IOCTL_MAP, request)) != 0) {
 		fprintf(stderr, "ioctl error: %d\n", status);
-		err = D_ERR_IOCTL;
+		err = UXU_ERR_IOCTL;
 	}
 
 	return err;
@@ -308,21 +308,21 @@ uxu_map(const char *filename, size_t size, unsigned short flags, void **paddr)
 	int	f_fd;
 	uxu_ioctl_map_t	*request;
 	cudaError_t	error;
-	int		ret = D_OK;
+	int		ret = UXU_OK;
 
 	if (!initialized) {
 		ret = init_module();
-		if (ret != D_OK)
+		if (ret != UXU_OK)
 			return ret;
 	}
 
 	if ((request = (uxu_ioctl_map_t *)calloc(1, sizeof(uxu_ioctl_map_t))) == NULL) {
 		fprintf(stderr, "Cannot calloc uxu_ioctl_map_t\n");
-		return D_ERR_MEM;
+		return UXU_ERR_MEM;
 	}
 
 	f_flags = O_RDWR | O_LARGEFILE;
-	if (flags & D_F_CREATE) {
+	if (flags & UXU_FLAGS_CREATE) {
 		f_fd = creat(filename, S_IRUSR | S_IWUSR);
 		if (f_fd >= 0)
 			close(f_fd);
@@ -331,14 +331,14 @@ uxu_map(const char *filename, size_t size, unsigned short flags, void **paddr)
 	if ((f_fd = open(filename, f_flags)) < 0) {
 		fprintf(stderr, "Cannot open the file %s\n", filename);
 		free(request);
-		return D_ERR_FILE;
+		return UXU_ERR_FILE;
 	}
 
-	if ((flags & D_F_CREATE) && ftruncate(f_fd, size) != 0) {
+	if ((flags & UXU_FLAGS_CREATE) && ftruncate(f_fd, size) != 0) {
 		fprintf(stderr, "Cannot truncate the file %s\n", filename);
 		close(f_fd);
 		free(request);
-		return D_ERR_FILE;
+		return UXU_ERR_FILE;
 	}
 
 	error = cudaMallocManaged(&request->uvm_addr, ALIGN_UP(size, 0x1000), cudaMemAttachGlobal);
@@ -346,7 +346,7 @@ uxu_map(const char *filename, size_t size, unsigned short flags, void **paddr)
 		fprintf(stderr, "failed to cudaMallocManaged: %s %s\n", cudaGetErrorName(error), cudaGetErrorString(error));
 		close(f_fd);
 		free(request);
-		return D_ERR_UVM;
+		return UXU_ERR_UVM;
 	}
 
 	request->backing_fd = f_fd;
@@ -358,7 +358,7 @@ uxu_map(const char *filename, size_t size, unsigned short flags, void **paddr)
 	else
 		ret = do_uxu_map(request);
 
-	if (ret == D_OK) {
+	if (ret == UXU_OK) {
 		*paddr = request->uvm_addr;
 		g_hash_table_insert(addr_map, request->uvm_addr, request);
 	}
@@ -374,24 +374,24 @@ uxu_remap(void *addr, unsigned short flags)
 	int	status;
 	uxu_ioctl_map_t	*request = g_hash_table_lookup(addr_map, addr);
 	int	fd;
-	uxu_err_t	err = D_OK;
+	uxu_err_t	err = UXU_OK;
 
 	if (request == NULL) {
 		fprintf(stderr, "%p is not mapped via uxu_map\n", addr);
-		return D_ERR_INTVAL;
+		return UXU_ERR_INTVAL;
 	}
 
 	fd = open_uvm_dev();
 	if (fd < 0)
-		return D_ERR_UVM;
+		return UXU_ERR_UVM;
 
 	cudaDeviceSynchronize();
 
 	request->flags = flags;
 
-	if ((status = ioctl(fd, DRAGON_IOCTL_REMAP, request)) != 0) {
+	if ((status = ioctl(fd, UXU_IOCTL_REMAP, request)) != 0) {
 		fprintf(stderr, "ioctl error: %d\n", status);
-		err = D_ERR_IOCTL;
+		err = UXU_ERR_IOCTL;
 	}
 
 	close(fd);
@@ -402,19 +402,19 @@ uxu_remap(void *addr, unsigned short flags)
 uxu_err_t
 uxu_trash_set_num_blocks(unsigned long nrblocks)
 {
-	return D_ERR_NOT_IMPLEMENTED;
+	return UXU_ERR_NOT_IMPLEMENTED;
 }
 
 uxu_err_t
 uxu_trash_set_num_reserved_sys_cache_pages(unsigned long nrpages)
 {
-	return D_ERR_NOT_IMPLEMENTED;
+	return UXU_ERR_NOT_IMPLEMENTED;
 }
 
 uxu_err_t
 uxu_flush(void *addr)
 {
-	return D_ERR_NOT_IMPLEMENTED;
+	return UXU_ERR_NOT_IMPLEMENTED;
 }
 
 uxu_err_t
@@ -424,14 +424,14 @@ uxu_unmap(void *addr)
 
 	if (request == NULL) {
 		fprintf(stderr, "%p is not mapped via uxu_map\n", addr);
-		return D_ERR_INTVAL;
+		return UXU_ERR_INTVAL;
 	}
 
 	if (disabled_uxu) {
 		flush_to_file(request);
 	}
 	else {
-		if ((request->flags & D_F_WRITE) && !(request->flags & D_F_VOLATILE))
+		if ((request->flags & UXU_FLAGS_WRITE) && !(request->flags & UXU_FLAGS_VOLATILE))
 			fsync(request->backing_fd);
 	}
 
@@ -439,5 +439,5 @@ uxu_unmap(void *addr)
 	g_hash_table_remove(addr_map, addr);
 	free_request(request);
 
-	return D_OK;
+	return UXU_OK;
 }
