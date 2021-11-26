@@ -32,8 +32,8 @@ Makefile
 /examples/vectorAdd/vectorAdd
 /examples/common/Makefile
 /examples/common/libutil.a
-/library/src/Makefile
-/library/src/libuxu.a
+/library/Makefile
+/library/libuxu.a
 /kernel_nvidia/.cache.mk
 /kernel_nvidia/.tmp_versions/
 /kernel_nvidia/Module.symvers

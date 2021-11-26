@@ -105,7 +105,7 @@ am_backprop_OBJECTS = $(am__objects_2)
 backprop_OBJECTS = $(am_backprop_OBJECTS)
 am__DEPENDENCIES_1 =
 am__DEPENDENCIES_2 = ../common/libutil.a \
-	$(top_srcdir)/library/src/libuxu.a $(am__DEPENDENCIES_1)
+	$(top_srcdir)/library/libuxu.a $(am__DEPENDENCIES_1)
 backprop_DEPENDENCIES = $(am__DEPENDENCIES_2)
 am__objects_3 = backprop_train.$(OBJEXT) backprop_gen-bpnn.$(OBJEXT)
 am_backprop_gen_OBJECTS = $(am__objects_3) \
@@ -285,8 +285,8 @@ SRCS = backprop.c $(SRCS_COMMON)
 backprop_SOURCES = $(SRCS)
 backprop_gen_SOURCES = $(SRCS_COMMON) generator.c
 AM_CPPFLAGS = -I../common -g
-common_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/library/include -I../common
-common_LDADD = -lcuda -lcudart ../common/libutil.a $(top_srcdir)/library/src/libuxu.a $(GLIB_LIBS)
+common_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/library -I../common
+common_LDADD = -lcuda -lcudart ../common/libutil.a $(top_srcdir)/library/libuxu.a $(GLIB_LIBS)
 backprop_CFLAGS = $(common_CFLAGS)
 backprop_LDADD = $(common_LDADD)
 backprop_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@

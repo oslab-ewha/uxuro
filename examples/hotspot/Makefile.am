@@ -7,8 +7,8 @@ hotspot_SOURCES = hotspot.cu
 hotspot_gen_SOURCES = hotspot_gen.cpp
 
 AM_CPPFLAGS = -I../common
-common_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/library/include -I../common
-common_LDADD = -lcuda -lcudart ../common/libutil.a ../common/libutil.a $(top_srcdir)/library/src/libuxu.a $(GLIB_LIBS)
+common_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/include -I../common
+common_LDADD = -lcuda -lcudart ../common/libutil.a ../common/libutil.a $(top_srcdir)/library/libuxu.a $(GLIB_LIBS)
 
 hotspot_CFLAGS = $(common_CFLAGS) -DCUDAMEMCPY
 hotspot_LDADD = $(common_LDADD)

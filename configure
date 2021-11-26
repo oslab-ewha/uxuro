@@ -585,7 +585,7 @@ PACKAGE_STRING='uxu 0.1.0'
 PACKAGE_BUGREPORT='cezanne@codemayo.com'
 PACKAGE_URL=''
 
-ac_unique_file="library/src/libuxu.c"
+ac_unique_file="library/libuxu.c"
 # Factoring default headers for most tests.
 ac_includes_default="\
 #include <stdio.h>
@@ -5575,7 +5575,7 @@ fi
 done
 
 
-ac_config_files="$ac_config_files Makefile library/src/Makefile examples/Makefile examples/common/Makefile examples/BlackScholes/Makefile examples/backprop/Makefile examples/binomialOptions/Makefile examples/hotspot/Makefile examples/lavaMD/Makefile examples/pathfinder/Makefile examples/srad_v2/Makefile examples/vectorAdd/Makefile tests/sanity-basic/Makefile"
+ac_config_files="$ac_config_files Makefile library/Makefile examples/Makefile examples/common/Makefile examples/BlackScholes/Makefile examples/backprop/Makefile examples/binomialOptions/Makefile examples/hotspot/Makefile examples/lavaMD/Makefile examples/pathfinder/Makefile examples/srad_v2/Makefile examples/vectorAdd/Makefile tests/sanity-basic/Makefile"
 
 
 cat >confcache <<\_ACEOF
@@ -6326,7 +6326,7 @@ do
     "config.h") CONFIG_HEADERS="$CONFIG_HEADERS config.h" ;;
     "depfiles") CONFIG_COMMANDS="$CONFIG_COMMANDS depfiles" ;;
     "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
-    "library/src/Makefile") CONFIG_FILES="$CONFIG_FILES library/src/Makefile" ;;
+    "library/Makefile") CONFIG_FILES="$CONFIG_FILES library/Makefile" ;;
     "examples/Makefile") CONFIG_FILES="$CONFIG_FILES examples/Makefile" ;;
     "examples/common/Makefile") CONFIG_FILES="$CONFIG_FILES examples/common/Makefile" ;;
     "examples/BlackScholes/Makefile") CONFIG_FILES="$CONFIG_FILES examples/BlackScholes/Makefile" ;;

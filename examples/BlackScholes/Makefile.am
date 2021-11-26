@@ -9,8 +9,8 @@ BlackScholes_SOURCES = $(SRCS)
 BlackScholes_gen_SOURCES = generator.cu $(SRCS_COMMON)
 
 AM_CPPFLAGS = -I../common
-common_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/library/include -I../common
-common_LDADD = -lcuda -lcudart ../common/libutil.a ../common/libutil.a $(top_srcdir)/library/src/libuxu.a $(GLIB_LIBS)
+common_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/library -I../common
+common_LDADD = -lcuda -lcudart ../common/libutil.a ../common/libutil.a $(top_srcdir)/library/libuxu.a $(GLIB_LIBS)
 
 BlackScholes_CFLAGS = $(common_CFLAGS) -DCUDAMEMCPY
 BlackScholes_LDADD = $(common_LDADD)

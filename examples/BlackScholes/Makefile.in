@@ -105,7 +105,7 @@ am_BlackScholes_OBJECTS = $(am__objects_2)
 BlackScholes_OBJECTS = $(am_BlackScholes_OBJECTS)
 am__DEPENDENCIES_1 =
 am__DEPENDENCIES_2 = ../common/libutil.a ../common/libutil.a \
-	$(top_srcdir)/library/src/libuxu.a $(am__DEPENDENCIES_1)
+	$(top_srcdir)/library/libuxu.a $(am__DEPENDENCIES_1)
 BlackScholes_DEPENDENCIES = $(am__DEPENDENCIES_2)
 am_BlackScholes_gen_OBJECTS = generator.$(OBJEXT) $(am__objects_1)
 BlackScholes_gen_OBJECTS = $(am_BlackScholes_gen_OBJECTS)
@@ -263,8 +263,8 @@ SRCS = BlackScholes.cu $(SRCS_COMMON)
 BlackScholes_SOURCES = $(SRCS)
 BlackScholes_gen_SOURCES = generator.cu $(SRCS_COMMON)
 AM_CPPFLAGS = -I../common
-common_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/library/include -I../common
-common_LDADD = -lcuda -lcudart ../common/libutil.a ../common/libutil.a $(top_srcdir)/library/src/libuxu.a $(GLIB_LIBS)
+common_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/library -I../common
+common_LDADD = -lcuda -lcudart ../common/libutil.a ../common/libutil.a $(top_srcdir)/library/libuxu.a $(GLIB_LIBS)
 BlackScholes_CFLAGS = $(common_CFLAGS) -DCUDAMEMCPY
 BlackScholes_LDADD = $(common_LDADD)
 BlackScholes_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@

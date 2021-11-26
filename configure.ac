@@ -3,7 +3,7 @@
 
 AC_PREREQ([2.69])
 AC_INIT([uxu], [0.1.0], [cezanne@codemayo.com])
-AC_CONFIG_SRCDIR([library/src/libuxu.c])
+AC_CONFIG_SRCDIR([library/libuxu.c])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_HEADERS([config.h])
 
@@ -37,7 +37,7 @@ AC_FUNC_MALLOC
 AC_CHECK_FUNCS([gettimeofday sqrt strchr])
 
 AC_CONFIG_FILES([Makefile
-                 library/src/Makefile
+                 library/Makefile
                  examples/Makefile
                  examples/common/Makefile
 		 examples/BlackScholes/Makefile

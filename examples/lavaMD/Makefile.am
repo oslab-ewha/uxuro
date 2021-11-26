@@ -7,8 +7,8 @@ lavaMD_SOURCES = lavaMD.cu
 lavaMD_gen_SOURCES = lavaMD_gen.c
 
 AM_CPPFLAGS = -I../common
-common_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/library/include -I../common
-common_LDADD = -lcuda -lcudart ../common/libutil.a ../common/libutil.a $(top_srcdir)/library/src/libuxu.a $(GLIB_LIBS)
+common_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/library -I../common
+common_LDADD = -lcuda -lcudart ../common/libutil.a ../common/libutil.a $(top_srcdir)/library/libuxu.a $(GLIB_LIBS)
 
 lavaMD_CFLAGS = $(common_CFLAGS) -DCUDAMEMCPY
 lavaMD_LDADD = $(common_LDADD)

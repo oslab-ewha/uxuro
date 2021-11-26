@@ -86,8 +86,7 @@ POST_INSTALL = :
 NORMAL_UNINSTALL = :
 PRE_UNINSTALL = :
 POST_UNINSTALL = :
-noinst_PROGRAMS = pathfinder.gen$(EXEEXT) pathfinder$(EXEEXT)
-subdir = examples/pathfinder
+subdir = library
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/cuda.m4 \
 	$(top_srcdir)/configure.ac
@@ -98,16 +97,17 @@ mkinstalldirs = $(install_sh) -d
 CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
-PROGRAMS = $(noinst_PROGRAMS)
-am_pathfinder_OBJECTS = pathfinder.$(OBJEXT)
-pathfinder_OBJECTS = $(am_pathfinder_OBJECTS)
-am__DEPENDENCIES_1 =
-am__DEPENDENCIES_2 = ../common/libutil.a ../common/libutil.a \
-	$(top_srcdir)/library/libuxu.a $(am__DEPENDENCIES_1)
-pathfinder_DEPENDENCIES = $(am__DEPENDENCIES_2)
-am_pathfinder_gen_OBJECTS = pathfinder_gen-pathfinder_gen.$(OBJEXT)
-pathfinder_gen_OBJECTS = $(am_pathfinder_gen_OBJECTS)
-pathfinder_gen_DEPENDENCIES = $(am__DEPENDENCIES_2)
+LIBRARIES = $(noinst_LIBRARIES)
+AR = ar
+ARFLAGS = cru
+AM_V_AR = $(am__v_AR_@AM_V@)
+am__v_AR_ = $(am__v_AR_@AM_DEFAULT_V@)
+am__v_AR_0 = @echo "  AR      " $@;
+am__v_AR_1 = 
+libuxu_a_AR = $(AR) $(ARFLAGS)
+libuxu_a_LIBADD =
+am_libuxu_a_OBJECTS = libuxu_a-libuxu.$(OBJEXT)
+libuxu_a_OBJECTS = $(am_libuxu_a_OBJECTS)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -140,8 +140,8 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(pathfinder_SOURCES) $(pathfinder_gen_SOURCES)
-DIST_SOURCES = $(pathfinder_SOURCES) $(pathfinder_gen_SOURCES)
+SOURCES = $(libuxu_a_SOURCES)
+DIST_SOURCES = $(libuxu_a_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -276,17 +276,9 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 CLEANFILES = *~
 DISTCLEANFILES = *~
-pathfinder_SOURCES = pathfinder.cu
-pathfinder_gen_SOURCES = pathfinder_gen.c
-AM_CPPFLAGS = -I../common
-common_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/library -I../common
-common_LDADD = -lcuda -lcudart ../common/libutil.a ../common/libutil.a $(top_srcdir)/library/libuxu.a $(GLIB_LIBS)
-pathfinder_CFLAGS = $(common_CFLAGS) -DCUDAMEMCPY
-pathfinder_LDADD = $(common_LDADD)
-pathfinder_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
-pathfinder_gen_CFLAGS = $(common_CFLAGS) -DGENERATOR
-pathfinder_gen_LDADD = $(common_LDADD)
-pathfinder_gen_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
+noinst_LIBRARIES = libuxu.a
+libuxu_a_CFLAGS = $(GLIB_CFLAGS) $(CUDA_INC)
+libuxu_a_SOURCES = libuxu.c
 all: all-am
 
 .SUFFIXES:
@@ -300,9 +292,9 @@ $(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am $(top_srcdir
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign examples/pathfinder/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign library/Makefile'; \
 	$(am__cd) $(top_srcdir) && \
-	  $(AUTOMAKE) --foreign examples/pathfinder/Makefile
+	  $(AUTOMAKE) --foreign library/Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \
 	  *config.status*) \
@@ -322,16 +314,13 @@ $(ACLOCAL_M4): @MAINTAINER_MODE_TRUE@ $(am__aclocal_m4_deps)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
 $(am__aclocal_m4_deps):
 
-clean-noinstPROGRAMS:
-	-test -z "$(noinst_PROGRAMS)" || rm -f $(noinst_PROGRAMS)
+clean-noinstLIBRARIES:
+	-test -z "$(noinst_LIBRARIES)" || rm -f $(noinst_LIBRARIES)
 
-pathfinder$(EXEEXT): $(pathfinder_OBJECTS) $(pathfinder_DEPENDENCIES) $(EXTRA_pathfinder_DEPENDENCIES) 
-	@rm -f pathfinder$(EXEEXT)
-	$(AM_V_GEN)$(pathfinder_LINK) $(pathfinder_OBJECTS) $(pathfinder_LDADD) $(LIBS)
-
-pathfinder.gen$(EXEEXT): $(pathfinder_gen_OBJECTS) $(pathfinder_gen_DEPENDENCIES) $(EXTRA_pathfinder_gen_DEPENDENCIES) 
-	@rm -f pathfinder.gen$(EXEEXT)
-	$(AM_V_GEN)$(pathfinder_gen_LINK) $(pathfinder_gen_OBJECTS) $(pathfinder_gen_LDADD) $(LIBS)
+libuxu.a: $(libuxu_a_OBJECTS) $(libuxu_a_DEPENDENCIES) $(EXTRA_libuxu_a_DEPENDENCIES) 
+	$(AM_V_at)-rm -f libuxu.a
+	$(AM_V_AR)$(libuxu_a_AR) libuxu.a $(libuxu_a_OBJECTS) $(libuxu_a_LIBADD)
+	$(AM_V_at)$(RANLIB) libuxu.a
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -339,7 +328,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/pathfinder_gen-pathfinder_gen.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libuxu_a-libuxu.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -355,19 +344,19 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(COMPILE) -c -o $@ `$(CYGPATH_W) '$<'`
 
-pathfinder_gen-pathfinder_gen.o: pathfinder_gen.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(pathfinder_gen_CFLAGS) $(CFLAGS) -MT pathfinder_gen-pathfinder_gen.o -MD -MP -MF $(DEPDIR)/pathfinder_gen-pathfinder_gen.Tpo -c -o pathfinder_gen-pathfinder_gen.o `test -f 'pathfinder_gen.c' || echo '$(srcdir)/'`pathfinder_gen.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/pathfinder_gen-pathfinder_gen.Tpo $(DEPDIR)/pathfinder_gen-pathfinder_gen.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='pathfinder_gen.c' object='pathfinder_gen-pathfinder_gen.o' libtool=no @AMDEPBACKSLASH@
+libuxu_a-libuxu.o: libuxu.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libuxu_a_CFLAGS) $(CFLAGS) -MT libuxu_a-libuxu.o -MD -MP -MF $(DEPDIR)/libuxu_a-libuxu.Tpo -c -o libuxu_a-libuxu.o `test -f 'libuxu.c' || echo '$(srcdir)/'`libuxu.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libuxu_a-libuxu.Tpo $(DEPDIR)/libuxu_a-libuxu.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libuxu.c' object='libuxu_a-libuxu.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(pathfinder_gen_CFLAGS) $(CFLAGS) -c -o pathfinder_gen-pathfinder_gen.o `test -f 'pathfinder_gen.c' || echo '$(srcdir)/'`pathfinder_gen.c
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libuxu_a_CFLAGS) $(CFLAGS) -c -o libuxu_a-libuxu.o `test -f 'libuxu.c' || echo '$(srcdir)/'`libuxu.c
 
-pathfinder_gen-pathfinder_gen.obj: pathfinder_gen.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(pathfinder_gen_CFLAGS) $(CFLAGS) -MT pathfinder_gen-pathfinder_gen.obj -MD -MP -MF $(DEPDIR)/pathfinder_gen-pathfinder_gen.Tpo -c -o pathfinder_gen-pathfinder_gen.obj `if test -f 'pathfinder_gen.c'; then $(CYGPATH_W) 'pathfinder_gen.c'; else $(CYGPATH_W) '$(srcdir)/pathfinder_gen.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/pathfinder_gen-pathfinder_gen.Tpo $(DEPDIR)/pathfinder_gen-pathfinder_gen.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='pathfinder_gen.c' object='pathfinder_gen-pathfinder_gen.obj' libtool=no @AMDEPBACKSLASH@
+libuxu_a-libuxu.obj: libuxu.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libuxu_a_CFLAGS) $(CFLAGS) -MT libuxu_a-libuxu.obj -MD -MP -MF $(DEPDIR)/libuxu_a-libuxu.Tpo -c -o libuxu_a-libuxu.obj `if test -f 'libuxu.c'; then $(CYGPATH_W) 'libuxu.c'; else $(CYGPATH_W) '$(srcdir)/libuxu.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libuxu_a-libuxu.Tpo $(DEPDIR)/libuxu_a-libuxu.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='libuxu.c' object='libuxu_a-libuxu.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(pathfinder_gen_CFLAGS) $(CFLAGS) -c -o pathfinder_gen-pathfinder_gen.obj `if test -f 'pathfinder_gen.c'; then $(CYGPATH_W) 'pathfinder_gen.c'; else $(CYGPATH_W) '$(srcdir)/pathfinder_gen.c'; fi`
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libuxu_a_CFLAGS) $(CFLAGS) -c -o libuxu_a-libuxu.obj `if test -f 'libuxu.c'; then $(CYGPATH_W) 'libuxu.c'; else $(CYGPATH_W) '$(srcdir)/libuxu.c'; fi`
 
 ID: $(am__tagged_files)
 	$(am__define_uniq_tagged_files); mkid -fID $$unique
@@ -453,7 +442,7 @@ distdir: $(DISTFILES)
 	done
 check-am: all-am
 check: check-am
-all-am: Makefile $(PROGRAMS)
+all-am: Makefile $(LIBRARIES)
 installdirs:
 install: install-am
 install-exec: install-exec-am
@@ -489,7 +478,7 @@ maintainer-clean-generic:
 	@echo "it deletes files that may require special tools to rebuild."
 clean: clean-am
 
-clean-am: clean-generic clean-noinstPROGRAMS mostlyclean-am
+clean-am: clean-generic clean-noinstLIBRARIES mostlyclean-am
 
 distclean: distclean-am
 	-rm -rf ./$(DEPDIR)
@@ -559,7 +548,7 @@ uninstall-am:
 .MAKE: install-am install-strip
 
 .PHONY: CTAGS GTAGS TAGS all all-am check check-am clean clean-generic \
-	clean-noinstPROGRAMS cscopelist-am ctags ctags-am distclean \
+	clean-noinstLIBRARIES cscopelist-am ctags ctags-am distclean \
 	distclean-compile distclean-generic distclean-tags distdir dvi \
 	dvi-am html html-am info info-am install install-am \
 	install-data install-data-am install-dvi install-dvi-am \
