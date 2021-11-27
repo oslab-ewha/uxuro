@@ -190,19 +190,13 @@ static void uvm_destroy_vma_managed(struct vm_area_struct *vma, bool make_zombie
 
     uvm_assert_rwsem_locked_write(&uvm_va_space_get(vma->vm_file)->lock);
     uvm_for_each_va_range_in_vma_safe(va_range, va_range_next, vma) {
+        if (va_range->node.uxu_rtn.filp)
+            uvm_uxu_unregister_va_range(va_range);
         // On exit_mmap (process teardown), current->mm is cleared so
         // uvm_va_range_vma_current would return NULL.
-        struct file *uxu_file = va_range->node.uxu_rtn.filp;
         UVM_ASSERT(uvm_va_range_vma(va_range) == vma);
         UVM_ASSERT(va_range->node.start >= vma->vm_start);
         UVM_ASSERT(va_range->node.end   <  vma->vm_end);
-
-        if (uxu_file && (va_range->node.uxu_rtn.flags & UVM_UXU_FLAG_WRITE) && !(va_range->node.uxu_rtn.flags & UVM_UXU_FLAG_VOLATILE)) {
-            uvm_uxu_flush(va_range);
-        }
-        if (uxu_file)
-            uvm_uxu_unregister_va_range(va_range);
-
         size += uvm_va_range_size(va_range);
         if (make_zombie)
             uvm_va_range_zombify(va_range);
@@ -763,7 +757,6 @@ static int uvm_mmap(struct file *filp, struct vm_area_struct *vma)
     NV_STATUS status = uvm_global_get_status();
     int ret = 0;
     bool vma_wrapper_allocated = false;
-    int pm_locked = 0;
 
     if (status != NV_OK)
         return -nv_status_to_errno(status);
@@ -782,7 +775,7 @@ static int uvm_mmap(struct file *filp, struct vm_area_struct *vma)
     // UVM mappings are required to set offset == VA. This simplifies things
     // since we don't have to worry about address aliasing (except for fork,
     // handled separately) and it makes unmap_mapping_range simpler.
-    if (!va_space->uxu_va_space.is_initailized && vma->vm_start != (vma->vm_pgoff << PAGE_SHIFT)) {
+    if (vma->vm_start != (vma->vm_pgoff << PAGE_SHIFT)) {
         UVM_DBG_PRINT_RL("vm_start 0x%lx != vm_pgoff 0x%lx\n", vma->vm_start, vma->vm_pgoff << PAGE_SHIFT);
         return -EINVAL;
     }
@@ -796,31 +789,17 @@ static int uvm_mmap(struct file *filp, struct vm_area_struct *vma)
         return -EINVAL;
     }
 
-    if (!rwsem_is_locked(&g_uvm_global.pm.lock.sem)) {
-        // If the PM lock cannot be acquired, disable the VMA and report success
-        // to the caller.  The caller is expected to determine whether the
-        // map operation succeeded via an ioctl() call.  This is necessary to
-        // safely handle MAP_FIXED, which needs to complete atomically to prevent
-        // the loss of the virtual address range.
-        if (!uvm_down_read_trylock(&g_uvm_global.pm.lock)) {
-            uvm_disable_vma(vma);
-            return 0;
-        }
-        pm_locked = 1;
+    // If the PM lock cannot be acquired, disable the VMA and report success
+    // to the caller.  The caller is expected to determine whether the
+    // map operation succeeded via an ioctl() call.  This is necessary to
+    // safely handle MAP_FIXED, which needs to complete atomically to prevent
+    // the loss of the virtual address range.
+    if (!uvm_down_read_trylock(&g_uvm_global.pm.lock)) {
+        uvm_disable_vma(vma);
+        return 0;
     }
 
     uvm_record_lock_mmap_sem_write(&current->mm->mmap_sem);
-
-    if (va_space->uxu_va_space.is_initailized && va_space->uxu_va_space.fd_pending >= 0) {
-        struct file	*file_new = fget(va_space->uxu_va_space.fd_pending);
-
-        if (file_new) {
-            file_new->private_data = vma->vm_file->private_data;
-            fput(vma->vm_file);
-            vma->vm_file = file_new;
-            va_space->uxu_va_space.fd_pending = -1;
-        }
-    }
 
     // VM_MIXEDMAP      Required to use vm_insert_page
     //
@@ -889,9 +868,7 @@ out:
 
     uvm_record_unlock_mmap_sem_write(&current->mm->mmap_sem);
 
-    if (pm_locked) {
-        uvm_up_read(&g_uvm_global.pm.lock);
-    }
+    uvm_up_read(&g_uvm_global.pm.lock);
 
     return ret;
 }
@@ -963,7 +940,7 @@ static long uvm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_VALIDATE_VA_RANGE,              uvm_api_validate_va_range);
 
         UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_UXU_INITIALIZE,                 uvm_api_uxu_initialize);
-        UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_UXU_REGISTER_FILE_VA_SPACE,     uvm_api_uxu_register_file_va_space);
+        UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_UXU_MAP,                        uvm_api_uxu_map);
         UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_UXU_REMAP,                      uvm_api_uxu_remap);
     }
 
@@ -1006,12 +983,7 @@ static const struct file_operations uvm_fops =
 
 bool uvm_file_is_nvidia_uvm(struct file *filp)
 {
-#if 0
-   return (filp != NULL) && (filp->f_op == &uvm_fops);
-#else
-   // TODO: more desirable approach required
-   return (filp != NULL) && (filp->private_data != NULL);
-#endif
+    return (filp != NULL) && (filp->f_op == &uvm_fops);
 }
 
 static int uvm_init(void)

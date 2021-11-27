@@ -1976,6 +1976,7 @@ static NV_STATUS block_populate_pages(uvm_va_block_t *block,
         if (status != NV_OK)
             return status;
     }
+
     return NV_OK;
 }
 
@@ -9630,7 +9631,6 @@ NV_STATUS uvm_va_block_service_locked(uvm_processor_id_t processor_id,
             uvm_page_mask_andnot(&service_context->block_context.caller_page_mask,
                                  new_residency_mask,
                                  &service_context->read_duplicate_mask)) {
-
             if (uvm_uxu_need_to_copy_from_file(va_block, processor_id)) {
                 status = uvm_uxu_read_begin(va_block, block_retry, service_context);
                 if (status != NV_OK)
@@ -9638,11 +9638,8 @@ NV_STATUS uvm_va_block_service_locked(uvm_processor_id_t processor_id,
                 do_uxu_read = true;
             }
 
-            if (uvm_uxu_is_managed(va_block->va_range)
-                && (va_block->uxu_use_uvm_buffer)
-            )
+            if (uvm_uxu_is_managed(va_block->va_range) && (va_block->uxu_use_uvm_buffer))
                 uvm_uxu_block_mark_recent_in_buffer(va_block);
-
             status = uvm_va_block_make_resident(va_block,
                                                 block_retry,
                                                 &service_context->block_context,

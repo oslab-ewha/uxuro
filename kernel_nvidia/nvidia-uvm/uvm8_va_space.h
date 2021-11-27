@@ -55,8 +55,6 @@ typedef struct uvm_uxu_va_space_t
     // init flags that dictate the optimization behaviors
     unsigned short flags;
 
-    // pending fd for dragon map
-    int fd_pending;
     struct task_struct *reducer;
     uvm_mutex_t lock;
     uvm_mutex_t lock_blocks;

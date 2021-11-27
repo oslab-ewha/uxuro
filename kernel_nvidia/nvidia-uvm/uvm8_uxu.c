@@ -122,7 +122,7 @@ uvm_uxu_initialize(uvm_va_space_t *va_space, unsigned long trash_nr_blocks, unsi
  * @return: NV_OK on success, NV_ERR_* otherwise.
  */
 NV_STATUS
-uvm_uxu_register_file_va_space(uvm_va_space_t *va_space, UVM_UXU_REGISTER_FILE_VA_SPACE_PARAMS *params)
+uvm_uxu_map(uvm_va_space_t *va_space, UVM_UXU_MAP_PARAMS *params)
 {
 	NV_STATUS	ret = NV_OK;
 	uvm_uxu_range_tree_node_t	*uxu_rtn;
@@ -254,13 +254,14 @@ uvm_uxu_remap(uvm_va_space_t *va_space, UVM_UXU_REMAP_PARAMS *params)
 NV_STATUS
 uvm_uxu_unregister_va_range(uvm_va_range_t *va_range)
 {
-	struct file	*filp;
-
 	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_range->node.uxu_rtn;
-
-	filp = uxu_rtn->filp;
+	struct file	*filp = uxu_rtn->filp;
 
 	UVM_ASSERT(filp != NULL);
+
+	if ((va_range->node.uxu_rtn.flags & UVM_UXU_FLAG_WRITE) && !(va_range->node.uxu_rtn.flags & UVM_UXU_FLAG_VOLATILE)) {
+		uvm_uxu_flush(va_range);
+        }
 
 	if (uxu_rtn->is_file_dirty_bitmaps)
 		kfree(uxu_rtn->is_file_dirty_bitmaps);
@@ -1204,4 +1205,30 @@ uvm_uxu_set_page_dirty(struct page *page)
 		*p = (x + 1);
 		*p = x;
 	}
+}
+
+NV_STATUS uvm_api_uxu_initialize(UVM_UXU_INITIALIZE_PARAMS *params, struct file *filp)
+{
+    uvm_va_space_t *va_space = uvm_va_space_get(filp);
+    return uvm_uxu_initialize(
+        va_space,
+        params->trash_nr_blocks,
+        params->trash_reserved_nr_pages,
+        params->flags
+    );
+}
+
+NV_STATUS uvm_api_uxu_map(UVM_UXU_MAP_PARAMS *params, struct file *filp)
+{
+    uvm_va_space_t *va_space = uvm_va_space_get(filp);
+
+    /* TODO: need check private data of dragon file */
+
+    return uvm_uxu_map(va_space, params);
+}
+
+NV_STATUS uvm_api_uxu_remap(UVM_UXU_REMAP_PARAMS *params, struct file *filp)
+{
+    uvm_va_space_t *va_space = uvm_va_space_get(filp);
+    return uvm_uxu_remap(va_space, params);
 }

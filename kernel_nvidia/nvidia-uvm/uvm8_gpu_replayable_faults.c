@@ -39,7 +39,6 @@
 #include "uvm8_ats_ibm.h"
 #include "uvm8_ats_faults.h"
 #include "uvm8_test.h"
-#include "uvm8_uxu.h"
 
 // TODO: Bug 1881601: [uvm] Add fault handling overview for replayable and
 // non-replayable faults

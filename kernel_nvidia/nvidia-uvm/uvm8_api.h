@@ -254,7 +254,7 @@ NV_STATUS uvm_api_alloc_semaphore_pool(UVM_ALLOC_SEMAPHORE_POOL_PARAMS *params, 
 NV_STATUS uvm_api_populate_pageable(const UVM_POPULATE_PAGEABLE_PARAMS *params, struct file *filp);
 
 NV_STATUS uvm_api_uxu_initialize(UVM_UXU_INITIALIZE_PARAMS *params, struct file *filp);
-NV_STATUS uvm_api_uxu_register_file_va_space(UVM_UXU_REGISTER_FILE_VA_SPACE_PARAMS *params, struct file *filp);
+NV_STATUS uvm_api_uxu_map(UVM_UXU_MAP_PARAMS *params, struct file *filp);
 NV_STATUS uvm_api_uxu_remap(UVM_UXU_REMAP_PARAMS *params, struct file *filp);
 
 #endif // __UVM8_API_H__

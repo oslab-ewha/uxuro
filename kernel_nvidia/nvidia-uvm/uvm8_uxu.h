@@ -8,6 +8,7 @@
 // Flags for each mapping
 #define UVM_UXU_FLAG_READ        0x01
 #define UVM_UXU_FLAG_WRITE       0x02
+#define UVM_UXU_FLAG_CREATE      0x04
 #define UVM_UXU_FLAG_DONTTRASH   0x08
 #define UVM_UXU_FLAG_VOLATILE    0x10
 #define UVM_UXU_FLAG_USEHOSTBUF  0x20
@@ -16,8 +17,7 @@ NV_STATUS uvm_uxu_initialize(uvm_va_space_t *va_space,
 			     unsigned long trash_nr_blocks,
 			     unsigned long trash_reserved_nr_pages,
 			     unsigned short flags);
-NV_STATUS uvm_uxu_register_file_va_space(uvm_va_space_t *va_space,
-					 UVM_UXU_REGISTER_FILE_VA_SPACE_PARAMS *params);
+NV_STATUS uvm_uxu_map(uvm_va_space_t *va_space, UVM_UXU_MAP_PARAMS *params);
 NV_STATUS uvm_uxu_remap(uvm_va_space_t *va_space,
 			UVM_UXU_REMAP_PARAMS *params);
 NV_STATUS uvm_uxu_unregister_va_range(uvm_va_range_t *va_range);
@@ -101,7 +101,7 @@ uvm_uxu_need_to_copy_from_file(uvm_va_block_t *va_block,
 	if (uvm_uxu_block_file_dirty(va_block))
 		return true;
 
-	return (!(uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE)	&&
+	return (!(uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE) &&
 		!((uxu_rtn->flags & UVM_UXU_FLAG_USEHOSTBUF) && va_block->uxu_use_uvm_buffer) &&
 		((uxu_rtn->flags & UVM_UXU_FLAG_READ) || UVM_ID_IS_CPU(processor_id)));
 }

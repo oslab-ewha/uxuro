@@ -1056,7 +1056,7 @@ typedef struct
 //
 // UvmUxuInitialize
 //
-#define UVM_UXU_INITIALIZE                                         UVM_IOCTL_BASE(1000)
+#define UVM_UXU_INITIALIZE                                            UVM_IOCTL_BASE(1000)
 
 typedef struct
 {
@@ -1067,9 +1067,9 @@ typedef struct
 } UVM_UXU_INITIALIZE_PARAMS;
 
 //
-// UvmUxuRegisterFileVaSpace
+// UvmUxuMap
 //
-#define UVM_UXU_REGISTER_FILE_VA_SPACE                             UVM_IOCTL_BASE(1001)
+#define UVM_UXU_MAP                                                   UVM_IOCTL_BASE(1001)
 
 typedef struct
 {
@@ -1078,12 +1078,12 @@ typedef struct
     size_t          size;               // IN
     unsigned short  flags;              // IN
     NV_STATUS       rmStatus;           // OUT
-} UVM_UXU_REGISTER_FILE_VA_SPACE_PARAMS;
+} UVM_UXU_MAP_PARAMS;
 
 //
 // UvmUxuRemap
 //
-#define UVM_UXU_REMAP                                              UVM_IOCTL_BASE(1004)
+#define UVM_UXU_REMAP                                                 UVM_IOCTL_BASE(1004)
 
 typedef struct
 {
