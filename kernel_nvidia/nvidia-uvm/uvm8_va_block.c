@@ -931,7 +931,6 @@ static NV_STATUS block_populate_page_cpu(uvm_va_block_t *block, uvm_page_index_t
         goto error;
 
     block->cpu.pages[page_index] = page;
-    block->uxu_use_uvm_buffer = true;
     return NV_OK;
 
 error:
@@ -7845,26 +7844,23 @@ static void block_kill(uvm_va_block_t *block)
 
     // Free CPU pages
     if (block->cpu.pages) {
-        if (block->uxu_use_uvm_buffer) {
-            uvm_page_index_t page_index;
-            for_each_va_block_page(page_index, block) {
-                if (block->cpu.pages[page_index]) {
-                    // be conservative.
-                    // Tell the OS we wrote to the page because we sometimes clear the dirty bit after writing to it.
+        uvm_page_index_t page_index;
+        for_each_va_block_page(page_index, block) {
+            if (block->cpu.pages[page_index]) {
+                // be conservative.
+                // Tell the OS we wrote to the page because we sometimes clear the dirty bit after writing to it.
 
-		    if (uvm_page_mask_test(&block->cpu.pagecached, page_index)) {
-			    put_page(block->cpu.pages[page_index]);
-		    }
-		    else {
-			    SetPageDirty(block->cpu.pages[page_index]);
-			    __free_page(block->cpu.pages[page_index]);
-		    }
+                if (uvm_page_mask_test(&block->cpu.pagecached, page_index)) {
+                    put_page(block->cpu.pages[page_index]);
                 }
                 else {
-                    UVM_ASSERT(!uvm_page_mask_test(&block->cpu.resident, page_index));
+                    SetPageDirty(block->cpu.pages[page_index]);
+                    __free_page(block->cpu.pages[page_index]);
                 }
             }
-            block->uxu_use_uvm_buffer = false;
+            else {
+                UVM_ASSERT(!uvm_page_mask_test(&block->cpu.resident, page_index));
+            }
         }
 
         // Clearing the resident bit isn't strictly necessary since this block
@@ -9633,7 +9629,7 @@ NV_STATUS uvm_va_block_service_locked(uvm_processor_id_t processor_id,
                 do_uxu_read = true;
             }
 
-            if (uvm_uxu_is_managed(va_block->va_range) && (va_block->uxu_use_uvm_buffer))
+            if (uvm_uxu_is_managed(va_block->va_range))
                 uvm_uxu_block_mark_recent_in_buffer(va_block);
             status = uvm_va_block_make_resident(va_block,
                                                 block_retry,
