@@ -107,45 +107,6 @@ uvm_uxu_need_to_copy_from_file(uvm_va_block_t *va_block,
 }
 
 static inline void
-uvm_uxu_block_clear_has_data(uvm_va_block_t *va_block)
-{
-	uvm_va_range_t	*va_range = va_block->va_range;
-	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_range->node.uxu_rtn;
-
-	size_t	index = uvm_va_range_block_index(va_range, va_block->start);
-	size_t	list_index = index / BITS_PER_LONG;
-	size_t	bitmap_index = index % BITS_PER_LONG;
-
-	clear_bit(bitmap_index, &uxu_rtn->has_data_bitmaps[list_index]);
-}
-
-static inline void
-uvm_uxu_block_set_has_data(uvm_va_block_t *va_block)
-{
-	uvm_va_range_t	*va_range = va_block->va_range;
-	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_range->node.uxu_rtn;
-
-	size_t	index = uvm_va_range_block_index(va_range, va_block->start);
-	size_t	list_index = index / BITS_PER_LONG;
-	size_t	bitmap_index = index % BITS_PER_LONG;
-
-	set_bit(bitmap_index, &uxu_rtn->has_data_bitmaps[list_index]);
-}
-
-static inline bool
-uvm_uxu_block_has_data(uvm_va_block_t *va_block)
-{
-	uvm_va_range_t	*va_range = va_block->va_range;
-	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_range->node.uxu_rtn;
-
-	size_t	index = uvm_va_range_block_index(va_range, va_block->start);
-	size_t	list_index = index / BITS_PER_LONG;
-	size_t	bitmap_index = index % BITS_PER_LONG;
-
-	return test_bit(bitmap_index, &uxu_rtn->has_data_bitmaps[list_index]);
-}
-
-static inline void
 uvm_uxu_block_clear_file_dirty(uvm_va_block_t *va_block)
 {
 	uvm_va_range_t	*va_range = va_block->va_range;

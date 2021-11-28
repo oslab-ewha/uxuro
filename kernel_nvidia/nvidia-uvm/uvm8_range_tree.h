@@ -33,7 +33,6 @@ typedef struct uvm_uxu_range_tree_node_t
     unsigned short flags;
     size_t size;
     unsigned long *is_file_dirty_bitmaps;
-    unsigned long *has_data_bitmaps;
     struct iovec *iov;
 } uvm_uxu_range_tree_node_t;
 

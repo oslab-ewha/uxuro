@@ -174,24 +174,15 @@ uvm_uxu_map(uvm_va_space_t *va_space, UVM_UXU_MAP_PARAMS *params)
 		goto _register_err_0;
 	}
 
-	// Allocate the bitmap to tell which blocks have data cached on the host.
-	uxu_rtn->has_data_bitmaps = kzalloc(sizeof(unsigned long) * BITS_TO_LONGS(max_nr_blocks), GFP_KERNEL);
-	if (!uxu_rtn->has_data_bitmaps) {
-		ret = NV_ERR_NO_MEMORY;
-		goto _register_err_1;
-	}
-
 	uxu_rtn->iov = kmalloc(sizeof(struct iovec) * PAGES_PER_UVM_VA_BLOCK, GFP_KERNEL);
 	if (!uxu_rtn->iov) {
 		ret = NV_ERR_NO_MEMORY;
-		goto _register_err_2;
+		goto _register_err_1;
 	}
 
 	return NV_OK;
 
 	// Found an error. Free allocated memory before go out.
-_register_err_2:
-	kfree(uxu_rtn->has_data_bitmaps);
 _register_err_1:
 	kfree(uxu_rtn->is_file_dirty_bitmaps);
 _register_err_0:
@@ -265,9 +256,6 @@ uvm_uxu_unregister_va_range(uvm_va_range_t *va_range)
 
 	if (uxu_rtn->is_file_dirty_bitmaps)
 		kfree(uxu_rtn->is_file_dirty_bitmaps);
-
-	if (uxu_rtn->has_data_bitmaps)
-		kfree(uxu_rtn->has_data_bitmaps);
 
 	if (uxu_rtn->iov)
 		kfree(uxu_rtn->iov);
@@ -668,6 +656,7 @@ NV_STATUS
 uvm_uxu_read_begin(uvm_va_block_t *va_block, uvm_va_block_retry_t *block_retry, uvm_service_block_context_t *service_context)
 {
 	NV_STATUS	status = NV_OK;
+	bool		is_file_dirty;
 
 	uvm_va_range_t	*va_range = va_block->va_range;
 
@@ -689,42 +678,37 @@ uvm_uxu_read_begin(uvm_va_block_t *va_block, uvm_va_block_retry_t *block_retry, 
 
 	UVM_ASSERT(uxu_file != NULL);
 
-	if (!uvm_uxu_block_has_data(va_block)) {
-		bool	is_file_dirty = uvm_uxu_block_file_dirty(va_block);
+	is_file_dirty = uvm_uxu_block_file_dirty(va_block);
 
-		// Prevent block_populate_pages from allocating new pages
-		uvm_uxu_block_set_file_dirty(va_block);
+	// Prevent block_populate_pages from allocating new pages
+	uvm_uxu_block_set_file_dirty(va_block);
 
-		// Change this va_block's state: all pages are the residents of CPU.
-		status = uvm_va_block_make_resident(va_block,
-						    block_retry,
-						    &service_context->block_context,
-						    UVM_ID_CPU,
-						    region,
-						    &my_mask,
-						    NULL,
-						    UVM_MAKE_RESIDENT_CAUSE_UXU);
+	// Change this va_block's state: all pages are the residents of CPU.
+	status = uvm_va_block_make_resident(va_block,
+					    block_retry,
+					    &service_context->block_context,
+					    UVM_ID_CPU,
+					    region,
+					    &my_mask,
+					    NULL,
+					    UVM_MAKE_RESIDENT_CAUSE_UXU);
 
-		// Return the dirty state to the original
-		if (!is_file_dirty)
-			uvm_uxu_block_clear_file_dirty(va_block);
+	// Return the dirty state to the original
+	if (!is_file_dirty)
+		uvm_uxu_block_clear_file_dirty(va_block);
 
-		if (status != NV_OK) {
-			printk(KERN_DEBUG "Cannot make temporary resident on CPU\n");
-			goto read_begin_err_0;
-		}
-
-		status = uvm_tracker_wait(&va_block->tracker);
-		if (status != NV_OK) {
-			printk(KERN_DEBUG "Cannot make temporary resident on CPU\n");
-			goto read_begin_err_0;
-		}
+	if (status != NV_OK) {
+		printk(KERN_DEBUG "Cannot make temporary resident on CPU\n");
+		goto read_begin_err_0;
 	}
 
-	if (fill_pagecaches_for_read(uxu_file, va_block, region)) {
-		uvm_uxu_block_set_has_data(va_block);
+	status = uvm_tracker_wait(&va_block->tracker);
+	if (status != NV_OK) {
+		printk(KERN_DEBUG "Cannot make temporary resident on CPU\n");
+		goto read_begin_err_0;
 	}
-	else {
+
+	if (!fill_pagecaches_for_read(uxu_file, va_block, region)) {
 		status = NV_ERR_OPERATING_SYSTEM;
 	}
 
@@ -875,7 +859,6 @@ uvm_uxu_release_block(uvm_va_block_t *va_block)
 
 	// Free the block.
 	if (old == va_block) {
-		uvm_uxu_block_clear_has_data(va_block);
 		uvm_va_block_kill(va_block);
 	}
 
@@ -1031,7 +1014,6 @@ uvm_uxu_write_end(uvm_va_block_t *va_block, bool is_flush)
 		}
 	}
 
-	uvm_uxu_block_set_has_data(va_block);
 	uvm_uxu_block_set_file_dirty(va_block);
 
 	current->backing_dev_info = NULL;
