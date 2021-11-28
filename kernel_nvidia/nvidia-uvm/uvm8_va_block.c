@@ -876,7 +876,7 @@ static inline bool uxu_is_pagecachable(uvm_va_block_t *block, uvm_page_index_t p
 
     if (!uvm_uxu_is_managed(block->va_range))
         return false;
-    if (block->va_range->node.uxu_rtn.flags & (UVM_UXU_FLAG_VOLATILE | UVM_UXU_FLAG_USEHOSTBUF))
+    if (block->va_range->node.uxu_rtn.flags & UVM_UXU_FLAG_VOLATILE)
         return false;
     inode = block->va_range->node.uxu_rtn.filp->f_mapping->host;
     len_remain = i_size_read(inode) - (block->start - block->va_range->node.start);
@@ -3034,12 +3034,7 @@ NV_STATUS uvm_va_block_make_resident(uvm_va_block_t *va_block,
     ) {
         uvm_uxu_range_tree_node_t *uxu_rtn = &va_block->va_range->node.uxu_rtn;
 
-        if (!uvm_uxu_block_file_dirty(va_block)
-            && ((uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE)
-                || (uxu_rtn->flags & UVM_UXU_FLAG_USEHOSTBUF))
-        ) {
-            if (uxu_rtn->flags & UVM_UXU_FLAG_USEHOSTBUF)
-                uvm_uxu_prepare_block_for_hostbuf(va_block);
+        if (!uvm_uxu_block_file_dirty(va_block) && (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE)) {
             uvm_uxu_block_mark_recent_in_buffer(va_block);
         }
         else {

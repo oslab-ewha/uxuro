@@ -11,6 +11,7 @@
 #define UVM_UXU_FLAG_CREATE      0x04
 #define UVM_UXU_FLAG_DONTTRASH   0x08
 #define UVM_UXU_FLAG_VOLATILE    0x10
+/* Not used. UXU always uses host buffer(page cache). */
 #define UVM_UXU_FLAG_USEHOSTBUF  0x20
 
 NV_STATUS uvm_uxu_initialize(uvm_va_space_t *va_space,
@@ -39,8 +40,6 @@ NV_STATUS uvm_uxu_write_begin(uvm_va_block_t *va_block, bool is_flush);
 NV_STATUS uvm_uxu_write_end(uvm_va_block_t *va_block, bool is_flush);
 
 NV_STATUS uvm_uxu_reduce_memory_consumption(uvm_va_space_t *va_space);
-
-NV_STATUS uvm_uxu_prepare_block_for_hostbuf(uvm_va_block_t *va_block);
 
 void uvm_uxu_set_page_dirty(struct page *page);
 
@@ -102,7 +101,6 @@ uvm_uxu_need_to_copy_from_file(uvm_va_block_t *va_block,
 		return true;
 
 	return (!(uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE) &&
-		!((uxu_rtn->flags & UVM_UXU_FLAG_USEHOSTBUF) && va_block->uxu_use_uvm_buffer) &&
 		((uxu_rtn->flags & UVM_UXU_FLAG_READ) || UVM_ID_IS_CPU(processor_id)));
 }
 
@@ -137,8 +135,7 @@ uvm_uxu_need_to_evict_from_gpu(uvm_va_block_t *va_block)
 {
 	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_block->va_range->node.uxu_rtn;
 
-	return (uxu_rtn->flags & UVM_UXU_FLAG_WRITE)
-	    || (uxu_rtn->flags & UVM_UXU_FLAG_USEHOSTBUF);
+	return (uxu_rtn->flags & UVM_UXU_FLAG_WRITE);
 }
 
 /**

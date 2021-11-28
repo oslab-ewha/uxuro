@@ -753,7 +753,6 @@ uvm_uxu_flush_block(uvm_va_block_t *va_block)
 {
 	NV_STATUS	status = NV_OK;
 	uvm_va_range_t	*va_range = va_block->va_range;
-	uvm_va_space_t	*va_space = va_range->va_space;
 	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_range->node.uxu_rtn;
 
 	if (!(uxu_rtn->flags & UVM_UXU_FLAG_WRITE))
@@ -769,13 +768,8 @@ uvm_uxu_flush_block(uvm_va_block_t *va_block)
 			return NV_ERR_NO_MEMORY;
 		}
 
-		// Force direct flush into the file for UVM_UXU_FLAG_USEHOSTBUF that has no host buffer
-		if ((uxu_rtn->flags & UVM_UXU_FLAG_USEHOSTBUF) && !va_block->uxu_use_uvm_buffer)
-			uvm_uxu_block_set_file_dirty(va_block);
-
 		uvm_mutex_lock(&va_block->lock);
 		// Move data resided on the GPU to host.
-		// Data is automatically moved to the file if UVM_UXU_FLAG_USEHOSTBUF is unset.
 		status = uvm_va_block_migrate_locked(va_block, NULL, block_context, region, UVM_ID_CPU, UVM_MIGRATE_MODE_MAKE_RESIDENT, NULL);
 		uvm_mutex_unlock(&va_block->lock);
 
@@ -791,15 +785,6 @@ uvm_uxu_flush_block(uvm_va_block_t *va_block)
 
 		if (status != NV_OK) {
 			printk(KERN_DEBUG "NOT NV_OK\n");
-			return status;
-		}
-	}
-
-	// Flush the data kept in the host memory
-	if ((uxu_rtn->flags & UVM_UXU_FLAG_USEHOSTBUF) && va_block->uxu_use_uvm_buffer) {
-		status = uvm_uxu_flush_host_block(va_space, va_range, va_block, false, NULL);
-		if (status != NV_OK) {
-			printk(KERN_DEBUG "CANNOT FLUSH HOST BLOCK\n");
 			return status;
 		}
 	}
@@ -862,21 +847,6 @@ uvm_uxu_release_block(uvm_va_block_t *va_block)
 		uvm_va_block_kill(va_block);
 	}
 
-	return NV_OK;
-}
-
-NV_STATUS
-uvm_uxu_prepare_block_for_hostbuf(uvm_va_block_t *va_block)
-{
-	int	page_id;
-	if (!va_block->uxu_use_uvm_buffer) {
-		for (page_id = 0; page_id < PAGES_PER_UVM_VA_BLOCK; ++page_id) {
-			if (va_block->cpu.pages[page_id] != NULL) {
-				uvm_uxu_unmap_page(va_block, page_id);
-				va_block->cpu.pages[page_id] = NULL;
-			}
-		}
-	}
 	return NV_OK;
 }
 
