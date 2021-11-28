@@ -124,7 +124,6 @@ uvm_uxu_initialize(uvm_va_space_t *va_space, unsigned long trash_nr_blocks, unsi
 NV_STATUS
 uvm_uxu_map(uvm_va_space_t *va_space, UVM_UXU_MAP_PARAMS *params)
 {
-	NV_STATUS	ret = NV_OK;
 	uvm_uxu_range_tree_node_t	*uxu_rtn;
 
 	uvm_range_tree_node_t	*node = uvm_range_tree_find(&va_space->va_range_tree, (NvU64)params->uvm_addr);
@@ -167,26 +166,14 @@ uvm_uxu_map(uvm_va_space_t *va_space, UVM_UXU_MAP_PARAMS *params)
 	// Calculate the number of blocks associated with this UVM range.
 	max_nr_blocks = uvm_va_range_num_blocks(container_of(node, uvm_va_range_t, node));
 
-	// Allocate the bitmap to tell which blocks have dirty data on the file.
-	uxu_rtn->is_file_dirty_bitmaps = kzalloc(sizeof(unsigned long) * BITS_TO_LONGS(max_nr_blocks), GFP_KERNEL);
-	if (!uxu_rtn->is_file_dirty_bitmaps) {
-		ret = NV_ERR_NO_MEMORY;
-		goto _register_err_0;
-	}
-
 	uxu_rtn->iov = kmalloc(sizeof(struct iovec) * PAGES_PER_UVM_VA_BLOCK, GFP_KERNEL);
 	if (!uxu_rtn->iov) {
-		ret = NV_ERR_NO_MEMORY;
-		goto _register_err_1;
+		fput(uxu_rtn->filp);
+		uxu_rtn->filp = NULL;
+		return NV_ERR_NO_MEMORY;
 	}
 
 	return NV_OK;
-
-	// Found an error. Free allocated memory before go out.
-_register_err_1:
-	kfree(uxu_rtn->is_file_dirty_bitmaps);
-_register_err_0:
-	return ret;
 }
 
 NV_STATUS
@@ -219,7 +206,7 @@ uvm_uxu_remap(uvm_va_space_t *va_space, UVM_UXU_REMAP_PARAMS *params)
 
 	// Volatile data is simply discarded even though it has been remapped with non-volatile
 	for_each_va_block_in_va_range_safe(va_range, va_block, va_block_next) {
-		uvm_uxu_block_clear_file_dirty(va_block);
+		va_block->is_dirty = false;
 		if (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE) {
 			uvm_uxu_release_block(va_block);
 			list_del(&va_block->uxu_lru);
@@ -253,9 +240,6 @@ uvm_uxu_unregister_va_range(uvm_va_range_t *va_range)
 	if ((va_range->node.uxu_rtn.flags & UVM_UXU_FLAG_WRITE) && !(va_range->node.uxu_rtn.flags & UVM_UXU_FLAG_VOLATILE)) {
 		uvm_uxu_flush(va_range);
         }
-
-	if (uxu_rtn->is_file_dirty_bitmaps)
-		kfree(uxu_rtn->is_file_dirty_bitmaps);
 
 	if (uxu_rtn->iov)
 		kfree(uxu_rtn->iov);
@@ -678,10 +662,10 @@ uvm_uxu_read_begin(uvm_va_block_t *va_block, uvm_va_block_retry_t *block_retry, 
 
 	UVM_ASSERT(uxu_file != NULL);
 
-	is_file_dirty = uvm_uxu_block_file_dirty(va_block);
+	is_file_dirty = va_block->is_dirty;
 
 	// Prevent block_populate_pages from allocating new pages
-	uvm_uxu_block_set_file_dirty(va_block);
+	va_block->is_dirty = true;
 
 	// Change this va_block's state: all pages are the residents of CPU.
 	status = uvm_va_block_make_resident(va_block,
@@ -694,8 +678,7 @@ uvm_uxu_read_begin(uvm_va_block_t *va_block, uvm_va_block_retry_t *block_retry, 
 					    UVM_MAKE_RESIDENT_CAUSE_UXU);
 
 	// Return the dirty state to the original
-	if (!is_file_dirty)
-		uvm_uxu_block_clear_file_dirty(va_block);
+	va_block->is_dirty = is_file_dirty;
 
 	if (status != NV_OK) {
 		printk(KERN_DEBUG "Cannot make temporary resident on CPU\n");
@@ -984,7 +967,7 @@ uvm_uxu_write_end(uvm_va_block_t *va_block, bool is_flush)
 		}
 	}
 
-	uvm_uxu_block_set_file_dirty(va_block);
+	va_block->is_dirty = true;
 
 	current->backing_dev_info = NULL;
 
@@ -1138,7 +1121,7 @@ uvm_uxu_flush_host_block(uvm_va_space_t *va_space, uvm_va_range_t *va_range, uvm
 	}
 
 	// Mark that this block has dirty data on the file.
-	uvm_uxu_block_set_file_dirty(va_block);
+	va_block->is_dirty = true;
 
 	// Switch back to the original space.
 	set_fs(fs);

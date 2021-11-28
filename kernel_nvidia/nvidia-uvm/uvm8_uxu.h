@@ -75,19 +75,6 @@ uvm_uxu_has_to_reclaim_blocks(uvm_uxu_va_space_t *uxu_va_space)
 }
 
 static inline bool
-uvm_uxu_block_file_dirty(uvm_va_block_t *va_block)
-{
-	uvm_va_range_t	*va_range = va_block->va_range;
-	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_range->node.uxu_rtn;
-
-	size_t	index = uvm_va_range_block_index(va_range, va_block->start);
-	size_t	list_index = index / BITS_PER_LONG;
-	size_t	bitmap_index = index % BITS_PER_LONG;
-
-	return test_bit(bitmap_index, &uxu_rtn->is_file_dirty_bitmaps[list_index]);
-}
-
-static inline bool
 uvm_uxu_need_to_copy_from_file(uvm_va_block_t *va_block,
 			       uvm_processor_id_t
 			       processor_id)
@@ -97,37 +84,11 @@ uvm_uxu_need_to_copy_from_file(uvm_va_block_t *va_block,
 	if (!uvm_uxu_is_managed(va_block->va_range))
 		return false;
 
-	if (uvm_uxu_block_file_dirty(va_block))
+	if (va_block->is_dirty)
 		return true;
 
 	return (!(uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE) &&
 		((uxu_rtn->flags & UVM_UXU_FLAG_READ) || UVM_ID_IS_CPU(processor_id)));
-}
-
-static inline void
-uvm_uxu_block_clear_file_dirty(uvm_va_block_t *va_block)
-{
-	uvm_va_range_t	*va_range = va_block->va_range;
-	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_range->node.uxu_rtn;
-
-	size_t index = uvm_va_range_block_index(va_range, va_block->start);
-	size_t list_index = index / BITS_PER_LONG;
-	size_t bitmap_index = index % BITS_PER_LONG;
-
-	clear_bit(bitmap_index, &uxu_rtn->is_file_dirty_bitmaps[list_index]);
-}
-
-static inline void
-uvm_uxu_block_set_file_dirty(uvm_va_block_t *va_block)
-{
-	uvm_va_range_t	*va_range = va_block->va_range;
-	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_range->node.uxu_rtn;
-
-	size_t index = uvm_va_range_block_index(va_range, va_block->start);
-	size_t list_index = index / BITS_PER_LONG;
-	size_t bitmap_index = index % BITS_PER_LONG;
-
-	set_bit(bitmap_index, &uxu_rtn->is_file_dirty_bitmaps[list_index]);
 }
 
 static inline bool

@@ -3033,7 +3033,7 @@ NV_STATUS uvm_va_block_make_resident(uvm_va_block_t *va_block,
     ) {
         uvm_uxu_range_tree_node_t *uxu_rtn = &va_block->va_range->node.uxu_rtn;
 
-        if (!uvm_uxu_block_file_dirty(va_block) && (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE)) {
+        if (!va_block->is_dirty && (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE)) {
             uvm_uxu_block_mark_recent_in_buffer(va_block);
         }
         else {
