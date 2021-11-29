@@ -1356,11 +1356,6 @@ static void uvm_page_mask_zero(uvm_page_mask_t *mask)
     bitmap_zero(mask->bitmap, PAGES_PER_UVM_VA_BLOCK);
 }
 
-static void uvm_page_mask_fill(uvm_page_mask_t *mask)
-{
-    bitmap_fill(mask->bitmap, PAGES_PER_UVM_VA_BLOCK);
-}
-
 static bool uvm_page_mask_empty(const uvm_page_mask_t *mask)
 {
     return bitmap_empty(mask->bitmap, PAGES_PER_UVM_VA_BLOCK);

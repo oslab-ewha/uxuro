@@ -36,6 +36,8 @@ void uxu_try_load_block(uvm_va_block_t *block,
 			uvm_service_block_context_t *service_context,
 			uvm_processor_id_t processor_id);
 
+NV_STATUS uxu_block_populate_page_cpu(uvm_va_block_t *block, uvm_page_index_t page_index, bool zero);
+
 NV_STATUS uvm_uxu_read_begin(uvm_va_block_t *va_block,
 			     uvm_va_block_retry_t *block_retry,
 			     uvm_service_block_context_t *service_context);
@@ -62,6 +64,12 @@ static inline bool
 uvm_uxu_is_managed(uvm_va_range_t *va_range)
 {
 	return va_range->node.uxu_rtn.filp != NULL;
+}
+
+static inline bool
+uxu_is_uxu_block(uvm_va_block_t *block)
+{
+	return uvm_uxu_is_managed(block->va_range);
 }
 
 /**

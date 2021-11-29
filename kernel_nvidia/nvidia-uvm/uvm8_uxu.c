@@ -35,6 +35,13 @@
 #include "uvm8_mem.h"
 #include "uvm8_uxu.h"
 
+NV_STATUS block_map_phys_cpu_page_on_gpus(uvm_va_block_t *block, uvm_page_index_t page_index, struct page *page);
+
+static void uvm_page_mask_fill(uvm_page_mask_t *mask)
+{
+	bitmap_fill(mask->bitmap, PAGES_PER_UVM_VA_BLOCK);
+}
+
 #define MIN(x,y) (x < y ? x : y)
 
 static void *fsdata_array[PAGES_PER_UVM_VA_BLOCK];
@@ -556,6 +563,28 @@ out:
 	return error;
 }
 
+static struct page *
+assign_page(uvm_va_block_t *block, bool zero)
+{
+	struct page *page;
+	gfp_t gfp_flags;
+
+	gfp_flags = NV_UVM_GFP_FLAGS | GFP_HIGHUSER;
+	if (zero)
+		gfp_flags |= __GFP_ZERO;
+
+	page = alloc_pages(gfp_flags, 0);
+	if (!page) {
+		return NULL;
+	}
+
+	// the kernel has 'written' zeros to this page, so it is dirty
+	if (zero)
+		SetPageDirty(page);
+
+	return page;
+}
+
 struct page *
 assign_pagecache(uvm_va_block_t *block, uvm_page_index_t page_index)
 {
@@ -574,6 +603,72 @@ assign_pagecache(uvm_va_block_t *block, uvm_page_index_t page_index)
 	insert_pagecache_to_va_block(block, page_index, page);
 	unlock_page(page);
 	return page;
+}
+
+static inline bool
+uxu_is_pagecachable(uvm_va_block_t *block, uvm_page_index_t page_id)
+{
+	struct inode *inode;
+	uvm_page_index_t	outer_max;
+	loff_t len_remain;
+
+	if (block->va_range->node.uxu_rtn.flags & UVM_UXU_FLAG_VOLATILE)
+		return false;
+	inode = block->va_range->node.uxu_rtn.filp->f_mapping->host;
+	len_remain = i_size_read(inode) - (block->start - block->va_range->node.start);
+	outer_max = (len_remain + PAGE_SIZE - 1) >> PAGE_SHIFT;
+	if (page_id >= outer_max)
+		return false;
+	return true;
+}
+
+NV_STATUS
+uxu_block_populate_page_cpu(uvm_va_block_t *block, uvm_page_index_t page_index, bool zero)
+{
+	uvm_va_block_test_t	*block_test = uvm_va_block_get_test(block);
+	struct page	*page;
+	NV_STATUS	status;
+
+	if (block->cpu.pages[page_index])
+		return NV_OK;
+
+	UVM_ASSERT(!uvm_page_mask_test(&block->cpu.resident, page_index));
+
+	// Return out of memory error if the tests have requested it. As opposed to
+	// other error injection settings, this one is persistent.
+	if (block_test && block_test->inject_cpu_pages_allocation_error)
+		return NV_ERR_NO_MEMORY;
+
+	if (uxu_is_pagecachable(block, page_index)) {
+		page = assign_pagecache(block, page_index);
+		if (page)
+			uvm_page_mask_set(&block->cpu.pagecached, page_index);
+		else {
+			page = assign_page(block, zero);
+			if (page) {
+				uvm_page_mask_clear(&block->cpu.pagecached, page_index);
+			}
+		}
+	}
+	else {
+		page = assign_page(block, zero);
+		if (page)
+			uvm_page_mask_clear(&block->cpu.pagecached, page_index);
+	}
+
+	if (page == NULL)
+		return NV_ERR_NO_MEMORY;
+
+	status = block_map_phys_cpu_page_on_gpus(block, page_index, page);
+	if (status != NV_OK)
+		goto error;
+
+	block->cpu.pages[page_index] = page;
+	return NV_OK;
+
+error:
+	__free_page(page);
+	return status;
 }
 
 static bool
@@ -830,7 +925,7 @@ uvm_uxu_release_block(uvm_va_block_t *va_block)
 {
 	uvm_va_block_t	*old;
 	size_t	index;
-  
+
 	uvm_va_range_t	*va_range = va_block->va_range;
 
 	UVM_ASSERT(va_block != NULL);
