@@ -48,7 +48,9 @@ AC_CONFIG_FILES([Makefile
 		 examples/pathfinder/Makefile
 		 examples/srad_v2/Makefile
 		 examples/vectorAdd/Makefile
+		 tests/Makefile
 		 tests/sanity-basic/Makefile
+		 tests/unit-test/Makefile
 		 ])
 
 AC_OUTPUT

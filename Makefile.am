@@ -1,1 +1,1 @@
-SUBDIRS = library examples tests/sanity-basic
+SUBDIRS = library examples tests
