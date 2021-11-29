@@ -2771,7 +2771,6 @@ static void block_copy_set_first_touch_residency(uvm_va_block_t *block,
         UVM_ASSERT(block_processor_page_is_populated(block, dst_id, page_index));
         UVM_ASSERT(block_check_resident_proximity(block, page_index, dst_id));
     }
-
     uvm_page_mask_or(resident_mask, resident_mask, first_touch_mask);
     if (!uvm_page_mask_empty(resident_mask))
         block_set_resident_processor(block, dst_id);
@@ -3026,11 +3025,9 @@ NV_STATUS uvm_va_block_make_resident(uvm_va_block_t *va_block,
     UVM_ASSERT(va_block->va_range);
     UVM_ASSERT(va_block->va_range->type == UVM_VA_RANGE_TYPE_MANAGED);
 
-    if (uvm_uxu_is_managed(va_range)
-        && uvm_uxu_need_to_evict_from_gpu(va_block)
-        && (cause == UVM_MAKE_RESIDENT_CAUSE_EVICTION
-            || (cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && UVM_ID_IS_CPU(dest_id)))
-    ) {
+    if (uvm_uxu_is_managed(va_range) &&
+        uvm_uxu_need_to_evict_from_gpu(va_block) &&
+        (cause == UVM_MAKE_RESIDENT_CAUSE_EVICTION || (cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && UVM_ID_IS_CPU(dest_id)))) {
         uvm_uxu_range_tree_node_t *uxu_rtn = &va_block->va_range->node.uxu_rtn;
 
         if (!va_block->is_dirty && (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE)) {
@@ -3041,6 +3038,7 @@ NV_STATUS uvm_va_block_make_resident(uvm_va_block_t *va_block,
             do_uxu_write = true;
         }
     }
+
     resident_mask = block_resident_mask_get_alloc(va_block, dest_id);
     if (!resident_mask)
         return NV_ERR_NO_MEMORY;

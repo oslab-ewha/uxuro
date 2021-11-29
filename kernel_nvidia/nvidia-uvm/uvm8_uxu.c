@@ -640,7 +640,6 @@ NV_STATUS
 uvm_uxu_read_begin(uvm_va_block_t *va_block, uvm_va_block_retry_t *block_retry, uvm_service_block_context_t *service_context)
 {
 	NV_STATUS	status = NV_OK;
-	bool		is_file_dirty;
 
 	uvm_va_range_t	*va_range = va_block->va_range;
 
@@ -662,11 +661,6 @@ uvm_uxu_read_begin(uvm_va_block_t *va_block, uvm_va_block_retry_t *block_retry, 
 
 	UVM_ASSERT(uxu_file != NULL);
 
-	is_file_dirty = va_block->is_dirty;
-
-	// Prevent block_populate_pages from allocating new pages
-	va_block->is_dirty = true;
-
 	// Change this va_block's state: all pages are the residents of CPU.
 	status = uvm_va_block_make_resident(va_block,
 					    block_retry,
@@ -676,9 +670,6 @@ uvm_uxu_read_begin(uvm_va_block_t *va_block, uvm_va_block_retry_t *block_retry, 
 					    &my_mask,
 					    NULL,
 					    UVM_MAKE_RESIDENT_CAUSE_UXU);
-
-	// Return the dirty state to the original
-	va_block->is_dirty = is_file_dirty;
 
 	if (status != NV_OK) {
 		printk(KERN_DEBUG "Cannot make temporary resident on CPU\n");
@@ -691,9 +682,10 @@ uvm_uxu_read_begin(uvm_va_block_t *va_block, uvm_va_block_retry_t *block_retry, 
 		goto read_begin_err_0;
 	}
 
-	if (!fill_pagecaches_for_read(uxu_file, va_block, region)) {
+	if (fill_pagecaches_for_read(uxu_file, va_block, region))
+		va_block->has_data = true;
+	else
 		status = NV_ERR_OPERATING_SYSTEM;
-	}
 
 read_begin_err_0:
 	// Put back the original mask.

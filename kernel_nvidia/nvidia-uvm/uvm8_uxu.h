@@ -86,7 +86,8 @@ uvm_uxu_need_to_copy_from_file(uvm_va_block_t *va_block,
 
 	if (va_block->is_dirty)
 		return true;
-
+	if (va_block->has_data)
+		return false;
 	return (!(uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE) &&
 		((uxu_rtn->flags & UVM_UXU_FLAG_READ) || UVM_ID_IS_CPU(processor_id)));
 }
