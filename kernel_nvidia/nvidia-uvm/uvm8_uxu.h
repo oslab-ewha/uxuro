@@ -31,6 +31,11 @@ NV_STATUS uvm_uxu_flush_block(uvm_va_block_t *va_block);
 NV_STATUS uvm_uxu_flush(uvm_va_range_t *va_range);
 NV_STATUS uvm_uxu_release_block(uvm_va_block_t *va_block);
 
+void uxu_try_load_block(uvm_va_block_t *block,
+			uvm_va_block_retry_t *block_retry,
+			uvm_service_block_context_t *service_context,
+			uvm_processor_id_t processor_id);
+
 NV_STATUS uvm_uxu_read_begin(uvm_va_block_t *va_block,
 			     uvm_va_block_retry_t *block_retry,
 			     uvm_service_block_context_t *service_context);
@@ -72,24 +77,6 @@ uvm_uxu_has_to_reclaim_blocks(uvm_uxu_va_space_t *uxu_va_space)
 	unsigned long	freeram = global_zone_page_state(NR_FREE_PAGES);
 	unsigned long	pagecacheram = global_zone_page_state(NR_FILE_PAGES);
 	return freeram + pagecacheram < uxu_va_space->trash_reserved_nr_pages;
-}
-
-static inline bool
-uvm_uxu_need_to_copy_from_file(uvm_va_block_t *va_block,
-			       uvm_processor_id_t
-			       processor_id)
-{
-	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_block->va_range->node.uxu_rtn;
-
-	if (!uvm_uxu_is_managed(va_block->va_range))
-		return false;
-
-	if (va_block->is_dirty)
-		return true;
-	if (va_block->has_data)
-		return false;
-	return (!(uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE) &&
-		((uxu_rtn->flags & UVM_UXU_FLAG_READ) || UVM_ID_IS_CPU(processor_id)));
 }
 
 static inline bool

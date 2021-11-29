@@ -716,6 +716,33 @@ uvm_uxu_read_end(uvm_va_block_t *va_block)
 	return NV_OK;
 }
 
+void
+uxu_try_load_block(uvm_va_block_t *block, uvm_va_block_retry_t *block_retry, uvm_service_block_context_t *service_context, uvm_processor_id_t processor_id)
+{
+	uvm_uxu_range_tree_node_t	*uxu_rtn = &block->va_range->node.uxu_rtn;
+	NV_STATUS	status;
+
+	if (block->has_data)
+		return;
+	if (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE)
+		return;
+	if (!(uxu_rtn->flags & UVM_UXU_FLAG_READ) && !UVM_ID_IS_CPU(processor_id))
+		return;
+
+	status = uvm_uxu_read_begin(block, block_retry, service_context);
+	if (status != NV_OK)
+		return;
+
+	uvm_tracker_wait(&block->tracker);
+	uvm_uxu_read_end(block);
+
+        if (UVM_ID_IS_CPU(processor_id)) {
+		uvm_uxu_write_begin(block, false);
+		uvm_uxu_write_end(block, false);
+        }
+	uvm_uxu_block_mark_recent_in_buffer(block);
+}
+
 /**
  * Evict out the block. This function can handle both CPU-only and GPU blocks.
  *

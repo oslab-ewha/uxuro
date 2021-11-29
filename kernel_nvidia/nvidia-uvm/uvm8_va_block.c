@@ -9520,7 +9520,6 @@ NV_STATUS uvm_va_block_service_locked(uvm_processor_id_t processor_id,
     uvm_perf_prefetch_hint_t prefetch_hint = UVM_PERF_PREFETCH_HINT_NONE();
     uvm_processor_mask_t processors_involved_in_cpu_migration;
 
-    bool do_uxu_read = false;
     uvm_assert_mutex_locked(&va_block->lock);
     UVM_ASSERT(va_range->type == UVM_VA_RANGE_TYPE_MANAGED);
 
@@ -9620,15 +9619,9 @@ NV_STATUS uvm_va_block_service_locked(uvm_processor_id_t processor_id,
             uvm_page_mask_andnot(&service_context->block_context.caller_page_mask,
                                  new_residency_mask,
                                  &service_context->read_duplicate_mask)) {
-            if (uvm_uxu_need_to_copy_from_file(va_block, processor_id)) {
-                status = uvm_uxu_read_begin(va_block, block_retry, service_context);
-                if (status != NV_OK)
-                    goto error;
-                do_uxu_read = true;
-            }
-
             if (uvm_uxu_is_managed(va_block->va_range))
-                uvm_uxu_block_mark_recent_in_buffer(va_block);
+                uxu_try_load_block(va_block, block_retry, service_context, processor_id);
+
             status = uvm_va_block_make_resident(va_block,
                                                 block_retry,
                                                 &service_context->block_context,
@@ -9640,7 +9633,7 @@ NV_STATUS uvm_va_block_service_locked(uvm_processor_id_t processor_id,
                                                 prefetch_hint.prefetch_pages_mask,
                                                 cause);
             if (status != NV_OK)
-                goto error;
+                return status;
         }
 
         if (service_context->read_duplicate_count != 0 &&
@@ -9656,7 +9649,7 @@ NV_STATUS uvm_va_block_service_locked(uvm_processor_id_t processor_id,
                                                                prefetch_hint.prefetch_pages_mask,
                                                                cause);
             if (status != NV_OK)
-                goto error;
+                return status;
         }
 
         if (UVM_ID_IS_CPU(new_residency)) {
@@ -9761,7 +9754,7 @@ NV_STATUS uvm_va_block_service_locked(uvm_processor_id_t processor_id,
                                                        &service_context->revocation_mask,
                                                        revoke_prot);
                 if (status != NV_OK)
-                    goto error;
+                    return status;
             }
         }
     }
@@ -9800,7 +9793,7 @@ NV_STATUS uvm_va_block_service_locked(uvm_processor_id_t processor_id,
                 status = NV_OK;
             }
             if (status != NV_OK)
-                goto error;
+                return status;
         }
     }
 
@@ -9826,7 +9819,7 @@ NV_STATUS uvm_va_block_service_locked(uvm_processor_id_t processor_id,
                                         map_prot_mask,
                                         NULL);
             if (status != NV_OK)
-                goto error;
+                return status;
         }
 
         // 3.2 - Add new mappings
@@ -9851,7 +9844,7 @@ NV_STATUS uvm_va_block_service_locked(uvm_processor_id_t processor_id,
                                           UvmEventMapRemoteCauseThrashing,
                                           &va_block->tracker);
                 if (status != NV_OK)
-                    goto error;
+                    return status;
 
                 // Remove thrashing pages from the map mask
                 pages_need_mapping = uvm_page_mask_andnot(helper_page_mask,
@@ -9873,7 +9866,7 @@ NV_STATUS uvm_va_block_service_locked(uvm_processor_id_t processor_id,
                                   UvmEventMapRemoteCausePolicy,
                                   &va_block->tracker);
         if (status != NV_OK)
-            goto error;
+            return status;
     }
 
     // 4- If pages did migrate, map SetAccessedBy processors, except for UVM-Lite
@@ -9919,7 +9912,7 @@ NV_STATUS uvm_va_block_service_locked(uvm_processor_id_t processor_id,
                                                                        new_prot,
                                                                        map_thrashing_processors);
                     if (status != NV_OK)
-                        goto error;
+                        return status;
                 }
 
                 pages_need_mapping = uvm_page_mask_andnot(map_prot_mask,
@@ -9939,23 +9932,11 @@ NV_STATUS uvm_va_block_service_locked(uvm_processor_id_t processor_id,
                                                                new_prot,
                                                                NULL);
             if (status != NV_OK)
-                goto error;
+                return status;
         }
     }
 
-error:
-    if (do_uxu_read) {
-        uvm_tracker_wait(&va_block->tracker);
-
-        uvm_uxu_read_end(va_block);
-
-        if (UVM_ID_IS_CPU(processor_id)) {
-            uvm_uxu_write_begin(va_block, false);
-            uvm_uxu_write_end(va_block, false);
-        }
-    }
-
-    return status;
+    return NV_OK;
 }
 
 // Check if we are faulting on a page with valid permissions to check if we can
