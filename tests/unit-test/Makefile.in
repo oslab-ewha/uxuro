@@ -87,7 +87,7 @@ NORMAL_UNINSTALL = :
 PRE_UNINSTALL = :
 POST_UNINSTALL = :
 TESTS = basictest$(EXEEXT)
-noinst_PROGRAMS = basictest$(EXEEXT)
+noinst_PROGRAMS = basictest$(EXEEXT) overscription$(EXEEXT)
 subdir = tests/unit-test
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/cuda.m4 \
@@ -106,6 +106,11 @@ basictest_LDADD = $(LDADD)
 am__DEPENDENCIES_1 =
 basictest_DEPENDENCIES = $(top_srcdir)/library/libuxu.a \
 	$(am__DEPENDENCIES_1) ../../examples/common/libutil.a
+am_overscription_OBJECTS = overscription.$(OBJEXT)
+overscription_OBJECTS = $(am_overscription_OBJECTS)
+overscription_LDADD = $(LDADD)
+overscription_DEPENDENCIES = $(top_srcdir)/library/libuxu.a \
+	$(am__DEPENDENCIES_1) ../../examples/common/libutil.a
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -119,8 +124,8 @@ am__v_at_ = $(am__v_at_@AM_DEFAULT_V@)
 am__v_at_0 = @
 am__v_at_1 = 
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
-SOURCES = $(basictest_SOURCES)
-DIST_SOURCES = $(basictest_SOURCES)
+SOURCES = $(basictest_SOURCES) $(overscription_SOURCES)
+DIST_SOURCES = $(basictest_SOURCES) $(overscription_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -466,6 +471,8 @@ CLEANFILES = *~
 DISTCLEANFILES = *~
 basictest_SOURCES = basictest.cu
 basictest_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
+overscription_SOURCES = overscription.cu
+overscription_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
 AM_CPPFLAGS = -I$(top_srcdir)/library -I../../examples/common
 LDADD = $(top_srcdir)/library/libuxu.a $(GLIB_LIBS) ../../examples/common/libutil.a
 all: all-am
@@ -509,6 +516,10 @@ clean-noinstPROGRAMS:
 basictest$(EXEEXT): $(basictest_OBJECTS) $(basictest_DEPENDENCIES) $(EXTRA_basictest_DEPENDENCIES) 
 	@rm -f basictest$(EXEEXT)
 	$(AM_V_GEN)$(basictest_LINK) $(basictest_OBJECTS) $(basictest_LDADD) $(LIBS)
+
+overscription$(EXEEXT): $(overscription_OBJECTS) $(overscription_DEPENDENCIES) $(EXTRA_overscription_DEPENDENCIES) 
+	@rm -f overscription$(EXEEXT)
+	$(AM_V_GEN)$(overscription_LINK) $(overscription_OBJECTS) $(overscription_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
