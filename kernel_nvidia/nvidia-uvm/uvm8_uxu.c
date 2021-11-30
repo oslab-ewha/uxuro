@@ -35,8 +35,6 @@
 #include "uvm8_mem.h"
 #include "uvm8_uxu.h"
 
-NV_STATUS block_map_phys_cpu_page_on_gpus(uvm_va_block_t *block, uvm_page_index_t page_index, struct page *page);
-
 static void uvm_page_mask_fill(uvm_page_mask_t *mask)
 {
 	bitmap_fill(mask->bitmap, PAGES_PER_UVM_VA_BLOCK);
@@ -585,7 +583,7 @@ assign_page(uvm_va_block_t *block, bool zero)
 	return page;
 }
 
-struct page *
+static struct page *
 assign_pagecache(uvm_va_block_t *block, uvm_page_index_t page_index)
 {
 	uvm_va_range_t	*va_range = block->va_range;
@@ -593,16 +591,9 @@ assign_pagecache(uvm_va_block_t *block, uvm_page_index_t page_index)
 	struct file	*uxu_file = uxu_rtn->filp;
 	loff_t	file_start_offset = block->start - block->va_range->node.start;
 	loff_t	offset;
-	int	page_id = page_index;
-	struct page	*page;
 
-	offset = file_start_offset + page_id * PAGE_SIZE;
-	page = read_mapping_page(uxu_file->f_mapping, offset, NULL);
-	if (page == NULL)
-		return NULL;
-	insert_pagecache_to_va_block(block, page_index, page);
-	unlock_page(page);
-	return page;
+	offset = file_start_offset + page_index * PAGE_SIZE;
+	return read_mapping_page(uxu_file->f_mapping, offset, NULL);
 }
 
 static inline bool
@@ -622,22 +613,10 @@ uxu_is_pagecachable(uvm_va_block_t *block, uvm_page_index_t page_id)
 	return true;
 }
 
-NV_STATUS
-uxu_block_populate_page_cpu(uvm_va_block_t *block, uvm_page_index_t page_index, bool zero)
+struct page *
+uxu_get_page(uvm_va_block_t *block, uvm_page_index_t page_index, bool zero)
 {
-	uvm_va_block_test_t	*block_test = uvm_va_block_get_test(block);
 	struct page	*page;
-	NV_STATUS	status;
-
-	if (block->cpu.pages[page_index])
-		return NV_OK;
-
-	UVM_ASSERT(!uvm_page_mask_test(&block->cpu.resident, page_index));
-
-	// Return out of memory error if the tests have requested it. As opposed to
-	// other error injection settings, this one is persistent.
-	if (block_test && block_test->inject_cpu_pages_allocation_error)
-		return NV_ERR_NO_MEMORY;
 
 	if (uxu_is_pagecachable(block, page_index)) {
 		page = assign_pagecache(block, page_index);
@@ -656,19 +635,7 @@ uxu_block_populate_page_cpu(uvm_va_block_t *block, uvm_page_index_t page_index, 
 			uvm_page_mask_clear(&block->cpu.pagecached, page_index);
 	}
 
-	if (page == NULL)
-		return NV_ERR_NO_MEMORY;
-
-	status = block_map_phys_cpu_page_on_gpus(block, page_index, page);
-	if (status != NV_OK)
-		goto error;
-
-	block->cpu.pages[page_index] = page;
-	return NV_OK;
-
-error:
-	__free_page(page);
-	return status;
+	return page;
 }
 
 static bool
@@ -950,10 +917,9 @@ uvm_uxu_release_block(uvm_va_block_t *va_block)
 NV_STATUS
 uvm_uxu_write_begin(uvm_va_block_t *va_block, bool is_flush)
 {
-	NV_STATUS	status = NV_OK;
-
-	int	page_id;
 	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_block->va_range->node.uxu_rtn;
+	int		page_id;
+	NV_STATUS	status = NV_OK;
 
 	// Calculate the file offset based on the block start address.
 	loff_t	file_start_offset = va_block->start - va_block->va_range->node.start;
@@ -1086,6 +1052,42 @@ uvm_uxu_write_end(uvm_va_block_t *va_block, bool is_flush)
 	current->backing_dev_info = NULL;
 
 	inode_unlock(f_inode);
+
+	return status;
+}
+
+NV_STATUS
+uxu_va_block_make_resident(uvm_va_block_t *va_block,
+			   uvm_va_block_retry_t *va_block_retry,
+			   uvm_va_block_context_t *va_block_context,
+			   uvm_processor_id_t dest_id,
+			   uvm_va_block_region_t region,
+			   const uvm_page_mask_t *page_mask,
+			   const uvm_page_mask_t *prefetch_page_mask,
+			   uvm_make_resident_cause_t cause)
+{
+	bool	do_uxu_write = false;
+	NV_STATUS	status;
+
+	if (!uvm_uxu_is_managed(va_block->va_range))
+		return uvm_va_block_make_resident(va_block, va_block_retry, va_block_context, dest_id, region, page_mask, prefetch_page_mask, cause);
+
+	if (uvm_uxu_need_to_evict_from_gpu(va_block) &&
+	    (cause == UVM_MAKE_RESIDENT_CAUSE_EVICTION || (cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && UVM_ID_IS_CPU(dest_id)))) {
+		uvm_uxu_range_tree_node_t *uxu_rtn = &va_block->va_range->node.uxu_rtn;
+
+		if (!va_block->is_dirty && (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE)) {
+			uvm_uxu_block_mark_recent_in_buffer(va_block);
+		}
+		else {
+			uvm_uxu_write_begin(va_block, cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE);
+			do_uxu_write = true;
+		}
+	}
+	status = uvm_va_block_make_resident(va_block, va_block_retry, va_block_context, dest_id, region, page_mask, prefetch_page_mask, cause);
+
+	status = uvm_tracker_wait(&va_block->tracker);
+	uvm_uxu_write_end(va_block, cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE);
 
 	return status;
 }

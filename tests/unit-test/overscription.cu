@@ -15,11 +15,11 @@
 #include "unit_test.h"
 
 static void
-test_write_full(unsigned long size)
+test_write_full(unsigned long size_evict, unsigned long size)
 {
-	do_map_for_write(4096);
+	do_map_for_write(size_evict);
 
-	RUN_KERNEL((kernel_write<<<8, 32>>>(buf_uxu, 4096)));
+	RUN_KERNEL((kernel_write<<<8, 32>>>(buf_uxu, size_evict)));
 
 	CUDA_CHECK(cudaMallocManaged((void **)&buf_uvm, size), "cudaMallocManaged failed");
 
@@ -27,7 +27,7 @@ test_write_full(unsigned long size)
 
 	do_unmap_for_write();
 
-	if (!check_tmpfile(4096))
+	if (!check_tmpfile(size_evict))
 		FAIL("unexpected evicted write");
 
 	cleanup();
@@ -38,7 +38,7 @@ test_write_full(unsigned long size)
 int
 main(int argc, char *argv[])
 {
-	test_write_full((unsigned long)(3.5 * GB));
+	test_write_full(8 * 1024, (unsigned long)(3.5 * GB));
 
 	return 0;
 }

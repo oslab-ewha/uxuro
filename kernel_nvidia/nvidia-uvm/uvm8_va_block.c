@@ -746,7 +746,7 @@ static void block_unmap_phys_cpu_page_on_gpus(uvm_va_block_t *block, uvm_page_in
     }
 }
 
-NV_STATUS block_map_phys_cpu_page_on_gpus(uvm_va_block_t *block, uvm_page_index_t page_index, struct page *page)
+static NV_STATUS block_map_phys_cpu_page_on_gpus(uvm_va_block_t *block, uvm_page_index_t page_index, struct page *page)
 {
     NV_STATUS status;
     uvm_gpu_id_t id;
@@ -1924,7 +1924,7 @@ static NV_STATUS block_populate_pages(uvm_va_block_t *block,
         resident_somewhere = !uvm_processor_mask_empty(&resident_on);
 
         // For pages not resident anywhere, need to populate with zeroed memory
-        status = _uxu_block_populate_page_cpu(block, page_index, !resident_somewhere);
+        status = uxubk_populate_page_cpu(block, page_index, !resident_somewhere);
         if (status != NV_OK)
             return status;
     }
@@ -2841,7 +2841,7 @@ static NV_STATUS block_copy_resident_pages(uvm_va_block_t *block,
                                      BLOCK_TRANSFER_MODE_INTERNAL_MOVE_TO_STAGE;
     }
 
-    status = __uxu_copy_resident_pages_mask(block,
+    status = uxubk_copy_resident_pages_mask(block,
                                             block_context,
                                             UVM_ID_CPU,
                                             &src_processor_mask,
@@ -2952,8 +2952,6 @@ NV_STATUS uvm_va_block_make_resident(uvm_va_block_t *va_block,
     uvm_page_mask_t *unmap_page_mask = &va_block_context->make_resident.page_mask;
     uvm_page_mask_t *resident_mask;
 
-    UXU_WRITE_PROLOG();
-
     va_block_context->make_resident.dest_id = dest_id;
     va_block_context->make_resident.cause = cause;
 
@@ -2966,8 +2964,6 @@ NV_STATUS uvm_va_block_make_resident(uvm_va_block_t *va_block,
     uvm_assert_mutex_locked(&va_block->lock);
     UVM_ASSERT(va_block->va_range);
     UVM_ASSERT(va_block->va_range->type == UVM_VA_RANGE_TYPE_MANAGED);
-
-    UXU_DO_WRITE();
 
     resident_mask = block_resident_mask_get_alloc(va_block, dest_id);
     if (!resident_mask)
@@ -3029,8 +3025,6 @@ NV_STATUS uvm_va_block_make_resident(uvm_va_block_t *va_block,
     // empty).
     if (uvm_processor_mask_test(&va_block->resident, dest_id))
         block_mark_memory_used(va_block, dest_id);
-
-    UXU_WRITE_EPILOG();
 
     return NV_OK;
 }

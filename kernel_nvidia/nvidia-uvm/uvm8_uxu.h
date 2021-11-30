@@ -36,7 +36,7 @@ void uxu_try_load_block(uvm_va_block_t *block,
 			uvm_service_block_context_t *service_context,
 			uvm_processor_id_t processor_id);
 
-NV_STATUS uxu_block_populate_page_cpu(uvm_va_block_t *block, uvm_page_index_t page_index, bool zero);
+struct page *uxu_get_page(uvm_va_block_t *block, uvm_page_index_t page_index, bool zero);
 
 NV_STATUS uvm_uxu_read_begin(uvm_va_block_t *va_block,
 			     uvm_va_block_retry_t *block_retry,
@@ -50,9 +50,17 @@ NV_STATUS uvm_uxu_reduce_memory_consumption(uvm_va_space_t *va_space);
 
 void uvm_uxu_set_page_dirty(struct page *page);
 
-struct page *assign_pagecache(uvm_va_block_t * block, uvm_page_index_t page_index);
-
 void stop_pagecache_reducer(uvm_va_space_t *va_space);
+
+NV_STATUS
+uxu_va_block_make_resident(uvm_va_block_t *va_block,
+			   uvm_va_block_retry_t *va_block_retry,
+			   uvm_va_block_context_t *va_block_context,
+			   uvm_processor_id_t dest_id,
+			   uvm_va_block_region_t region,
+			   const uvm_page_mask_t *page_mask,
+			   const uvm_page_mask_t *prefetch_page_mask,
+			   uvm_make_resident_cause_t cause);
 
 /**
  * Is this va_range managed by uxu driver?
