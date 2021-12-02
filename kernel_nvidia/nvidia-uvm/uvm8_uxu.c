@@ -35,14 +35,17 @@
 #include "uvm8_mem.h"
 #include "uvm8_uxu.h"
 
-static void uvm_page_mask_fill(uvm_page_mask_t *mask)
+#define MIN(x, y) ((x) < (y) ? (x): (y))
+
+typedef void *uxu_fsdata_array_t[PAGES_PER_UVM_VA_BLOCK];
+
+static struct kmem_cache	*g_uxu_fsdata_array_cache __read_mostly;
+
+static void
+uvm_page_mask_fill(uvm_page_mask_t *mask)
 {
 	bitmap_fill(mask->bitmap, PAGES_PER_UVM_VA_BLOCK);
 }
-
-#define MIN(x,y) (x < y ? x : y)
-
-static void *fsdata_array[PAGES_PER_UVM_VA_BLOCK];
 
 static int pagecache_reducer(void *ctx)
 {
@@ -798,10 +801,6 @@ uxu_try_load_block(uvm_va_block_t *block, uvm_va_block_retry_t *block_retry, uvm
 	uvm_tracker_wait(&block->tracker);
 	uvm_uxu_read_end(block);
 
-        if (UVM_ID_IS_CPU(processor_id)) {
-		uvm_uxu_write_begin(block, false);
-		uvm_uxu_write_end(block, false);
-        }
 	uvm_uxu_block_mark_recent_in_buffer(block);
 }
 
@@ -914,8 +913,8 @@ uvm_uxu_release_block(uvm_va_block_t *va_block)
 	return NV_OK;
 }
 
-NV_STATUS
-uvm_uxu_write_begin(uvm_va_block_t *va_block, bool is_flush)
+static NV_STATUS
+uvm_uxu_write_begin(uvm_va_block_t *va_block, bool is_flush, void *fsdata_array[])
 {
 	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_block->va_range->node.uxu_rtn;
 	int		page_id;
@@ -1010,8 +1009,8 @@ uvm_uxu_write_begin(uvm_va_block_t *va_block, bool is_flush)
 	return status;
 }
 
-NV_STATUS
-uvm_uxu_write_end(uvm_va_block_t *va_block, bool is_flush)
+static NV_STATUS
+uvm_uxu_write_end(uvm_va_block_t *va_block, bool is_flush, void *fsdata_array[])
 {
 	NV_STATUS	status = NV_OK;
 
@@ -1068,9 +1067,14 @@ uxu_va_block_make_resident(uvm_va_block_t *va_block,
 {
 	bool	do_uxu_write = false;
 	NV_STATUS	status;
+	uxu_fsdata_array_t	*pfsdata_array;
 
 	if (!uvm_uxu_is_managed(va_block->va_range))
 		return uvm_va_block_make_resident(va_block, va_block_retry, va_block_context, dest_id, region, page_mask, prefetch_page_mask, cause);
+
+	pfsdata_array = kmem_cache_alloc(g_uxu_fsdata_array_cache, NV_UVM_GFP_FLAGS);
+	if (pfsdata_array == NULL)
+		return NV_ERR_NO_MEMORY;
 
 	if (uvm_uxu_need_to_evict_from_gpu(va_block) &&
 	    (cause == UVM_MAKE_RESIDENT_CAUSE_EVICTION || (cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && UVM_ID_IS_CPU(dest_id)))) {
@@ -1080,14 +1084,15 @@ uxu_va_block_make_resident(uvm_va_block_t *va_block,
 			uvm_uxu_block_mark_recent_in_buffer(va_block);
 		}
 		else {
-			uvm_uxu_write_begin(va_block, cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE);
+			uvm_uxu_write_begin(va_block, cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE, *pfsdata_array);
 			do_uxu_write = true;
 		}
 	}
 	status = uvm_va_block_make_resident(va_block, va_block_retry, va_block_context, dest_id, region, page_mask, prefetch_page_mask, cause);
-
-	status = uvm_tracker_wait(&va_block->tracker);
-	uvm_uxu_write_end(va_block, cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE);
+	if (status == NV_OK)
+		status = uvm_tracker_wait(&va_block->tracker);
+	uvm_uxu_write_end(va_block, cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE, *pfsdata_array);
+	kmem_cache_free(g_uxu_fsdata_array_cache, pfsdata_array);
 
 	return status;
 }
@@ -1282,4 +1287,19 @@ NV_STATUS uvm_api_uxu_remap(UVM_UXU_REMAP_PARAMS *params, struct file *filp)
 {
     uvm_va_space_t *va_space = uvm_va_space_get(filp);
     return uvm_uxu_remap(va_space, params);
+}
+
+NV_STATUS
+uxu_init(void)
+{
+	g_uxu_fsdata_array_cache = NV_KMEM_CACHE_CREATE("uxu_fsdata_array_t", uxu_fsdata_array_t);
+	if (!g_uxu_fsdata_array_cache)
+		return NV_ERR_NO_MEMORY;
+	return NV_OK;
+}
+
+void
+uxu_exit(void)
+{
+	kmem_cache_destroy_safe(&g_uxu_fsdata_array_cache);
 }

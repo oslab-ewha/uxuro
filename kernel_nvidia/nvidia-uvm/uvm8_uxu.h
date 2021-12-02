@@ -14,6 +14,9 @@
 /* Not used. UXU always uses host buffer(page cache). */
 #define UVM_UXU_FLAG_USEHOSTBUF  0x20
 
+NV_STATUS uxu_init(void);
+void uxu_exit(void);
+
 NV_STATUS uvm_uxu_initialize(uvm_va_space_t *va_space,
 			     unsigned long trash_nr_blocks,
 			     unsigned long trash_reserved_nr_pages,
@@ -42,9 +45,6 @@ NV_STATUS uvm_uxu_read_begin(uvm_va_block_t *va_block,
 			     uvm_va_block_retry_t *block_retry,
 			     uvm_service_block_context_t *service_context);
 NV_STATUS uvm_uxu_read_end(uvm_va_block_t *va_block);
-
-NV_STATUS uvm_uxu_write_begin(uvm_va_block_t *va_block, bool is_flush);
-NV_STATUS uvm_uxu_write_end(uvm_va_block_t *va_block, bool is_flush);
 
 NV_STATUS uvm_uxu_reduce_memory_consumption(uvm_va_space_t *va_space);
 
