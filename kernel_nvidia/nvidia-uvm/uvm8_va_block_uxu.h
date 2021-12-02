@@ -58,7 +58,7 @@ error:
 static inline NV_STATUS
 uxubk_populate_page_cpu(uvm_va_block_t *block, uvm_page_index_t page_index, bool zero)
 {
-	if (uxu_is_uxu_block(block))
+	if (uvm_is_uxu_block(block))
 		return uxu_block_populate_page_cpu(block, page_index, zero);
 	else
 		return block_populate_page_cpu(block, page_index, zero);
@@ -85,7 +85,7 @@ uxubk_copy_resident_pages_mask(uvm_va_block_t *block,
 {
 	uvm_make_resident_cause_t	cause = block_context->make_resident.cause;
 
-	if (!uvm_uxu_is_managed(block->va_range) ||
+	if (!uvm_is_uxu_block(block) ||
 	    (cause != UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && cause != UVM_MAKE_RESIDENT_CAUSE_UXU) ||
 	    (cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && UVM_ID_IS_CPU(dst_id) && uvm_uxu_need_to_evict_from_gpu(block)) ||
 	    (cause == UVM_MAKE_RESIDENT_CAUSE_UXU && UVM_ID_IS_GPU(dst_id))) {

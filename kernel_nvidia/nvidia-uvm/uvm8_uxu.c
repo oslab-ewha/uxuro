@@ -701,8 +701,8 @@ get_region_readable_outer(uvm_va_block_t *va_block, struct file *uxu_file)
  *
  * @return: NV_OK on success. NV_ERR_* otherwise.
  */
-NV_STATUS
-uvm_uxu_read_begin(uvm_va_block_t *va_block, uvm_va_block_retry_t *block_retry, uvm_service_block_context_t *service_context)
+static NV_STATUS
+uxu_read_begin(uvm_va_block_t *va_block, uvm_va_block_retry_t *block_retry, uvm_service_block_context_t *service_context)
 {
 	NV_STATUS	status = NV_OK;
 
@@ -759,8 +759,8 @@ read_begin_err_0:
 	return status;
 }
 
-NV_STATUS
-uvm_uxu_read_end(uvm_va_block_t *va_block)
+static NV_STATUS
+uxu_read_end(uvm_va_block_t *va_block)
 {
 	int	page_id;
 	struct page	*page;
@@ -794,12 +794,12 @@ uxu_try_load_block(uvm_va_block_t *block, uvm_va_block_retry_t *block_retry, uvm
 	if (!(uxu_rtn->flags & UVM_UXU_FLAG_READ) && !UVM_ID_IS_CPU(processor_id))
 		return;
 
-	status = uvm_uxu_read_begin(block, block_retry, service_context);
+	status = uxu_read_begin(block, block_retry, service_context);
 	if (status != NV_OK)
 		return;
 
 	uvm_tracker_wait(&block->tracker);
-	uvm_uxu_read_end(block);
+	uxu_read_end(block);
 
 	uvm_uxu_block_mark_recent_in_buffer(block);
 }
@@ -1069,7 +1069,7 @@ uxu_va_block_make_resident(uvm_va_block_t *va_block,
 	NV_STATUS	status;
 	uxu_fsdata_array_t	*pfsdata_array;
 
-	if (!uvm_uxu_is_managed(va_block->va_range))
+	if (!uvm_is_uxu_block(va_block))
 		return uvm_va_block_make_resident(va_block, va_block_retry, va_block_context, dest_id, region, page_mask, prefetch_page_mask, cause);
 
 	pfsdata_array = kmem_cache_alloc(g_uxu_fsdata_array_cache, NV_UVM_GFP_FLAGS);
@@ -1093,65 +1093,6 @@ uxu_va_block_make_resident(uvm_va_block_t *va_block,
 		status = uvm_tracker_wait(&va_block->tracker);
 	uvm_uxu_write_end(va_block, cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE, *pfsdata_array);
 	kmem_cache_free(g_uxu_fsdata_array_cache, pfsdata_array);
-
-	return status;
-}
-
-/**
- * Automatically reduce memory usage if we need to.
- *
- * @param va_space: va_space that governs this operation.
- * @param force: if true, we will evict some blocks without checking for the memory pressure.
- *
- * @return: NV_OK on success, NV_ERR_* otherwise.
- */
-NV_STATUS
-uvm_uxu_reduce_memory_consumption(uvm_va_space_t *va_space)
-{
-	/*
-	 * TODO: locking assertion failed. write lock is required.
-	 */
-	NV_STATUS	status = NV_OK;
-
-	uvm_uxu_va_space_t	*uxu_va_space = &va_space->uxu_va_space;
-
-	unsigned long	counter = 0;
-
-	uvm_va_block_t	*va_block;
-	struct list_head *lp, *next;
-
-	uvm_va_space_down_write(va_space);
-	// Reclaim blocks based on least recent transfer.
-
-	list_for_each_safe(lp, next, &uxu_va_space->lru_head) {
-		if (counter >= uxu_va_space->trash_nr_blocks)
-			break;
-		va_block = list_entry(lp, uvm_va_block_t, uxu_lru);
-
-		// Terminate the loop since we cannot trash out blocks that have a copy on GPU
-		if (uvm_processor_mask_get_gpu_count(&(va_block->resident)) > 0) {
-			//printk(KERN_DEBUG "Encounter a block whose data are in GPU!!!\n");
-			continue;
-		}
-		// Evict the block if it is on CPU only and this `va_range` has the write flag.
-		if (uvm_processor_mask_get_count(&(va_block->resident)) > 0 && va_block->va_range->node.uxu_rtn.flags & UVM_UXU_FLAG_WRITE) {
-			status = uvm_uxu_flush_host_block(va_block->va_range->va_space, va_block->va_range, va_block, true, NULL);
-			if (status != NV_OK) {
-				printk(KERN_DEBUG "Cannot evict block\n");
-				continue;
-			}
-		}
-
-		uvm_mutex_lock(&uxu_va_space->lock_blocks);
-		// Remove this block from the list and release it.
-		list_del_init(&va_block->uxu_lru);
-		uvm_mutex_unlock(&uxu_va_space->lock_blocks);
-
-		uvm_uxu_release_block(va_block);
-		++counter;
-	}
-
-	uvm_va_space_up_write(va_space);
 
 	return status;
 }
@@ -1261,6 +1202,65 @@ uvm_uxu_set_page_dirty(struct page *page)
 		*p = (x + 1);
 		*p = x;
 	}
+}
+
+/**
+ * Automatically reduce memory usage if we need to.
+ *
+ * @param va_space: va_space that governs this operation.
+ * @param force: if true, we will evict some blocks without checking for the memory pressure.
+ *
+ * @return: NV_OK on success, NV_ERR_* otherwise.
+ */
+NV_STATUS
+uvm_uxu_reduce_memory_consumption(uvm_va_space_t *va_space)
+{
+	/*
+	 * TODO: locking assertion failed. write lock is required.
+	 */
+	NV_STATUS	status = NV_OK;
+
+	uvm_uxu_va_space_t	*uxu_va_space = &va_space->uxu_va_space;
+
+	unsigned long	counter = 0;
+
+	uvm_va_block_t	*va_block;
+	struct list_head *lp, *next;
+
+	uvm_va_space_down_write(va_space);
+	// Reclaim blocks based on least recent transfer.
+
+	list_for_each_safe(lp, next, &uxu_va_space->lru_head) {
+		if (counter >= uxu_va_space->trash_nr_blocks)
+			break;
+		va_block = list_entry(lp, uvm_va_block_t, uxu_lru);
+
+		// Terminate the loop since we cannot trash out blocks that have a copy on GPU
+		if (uvm_processor_mask_get_gpu_count(&(va_block->resident)) > 0) {
+			//printk(KERN_DEBUG "Encounter a block whose data are in GPU!!!\n");
+			continue;
+		}
+		// Evict the block if it is on CPU only and this `va_range` has the write flag.
+		if (uvm_processor_mask_get_count(&(va_block->resident)) > 0 && va_block->va_range->node.uxu_rtn.flags & UVM_UXU_FLAG_WRITE) {
+			status = uvm_uxu_flush_host_block(va_block->va_range->va_space, va_block->va_range, va_block, true, NULL);
+			if (status != NV_OK) {
+				printk(KERN_DEBUG "Cannot evict block\n");
+				continue;
+			}
+		}
+
+		uvm_mutex_lock(&uxu_va_space->lock_blocks);
+		// Remove this block from the list and release it.
+		list_del_init(&va_block->uxu_lru);
+		uvm_mutex_unlock(&uxu_va_space->lock_blocks);
+
+		uvm_uxu_release_block(va_block);
+		++counter;
+	}
+
+	uvm_va_space_up_write(va_space);
+
+	return status;
 }
 
 NV_STATUS uvm_api_uxu_initialize(UVM_UXU_INITIALIZE_PARAMS *params, struct file *filp)

@@ -9536,7 +9536,7 @@ NV_STATUS uvm_va_block_service_locked(uvm_processor_id_t processor_id,
             uvm_page_mask_andnot(&service_context->block_context.caller_page_mask,
                                  new_residency_mask,
                                  &service_context->read_duplicate_mask)) {
-            if (uvm_uxu_is_managed(va_block->va_range))
+            if (uvm_is_uxu_block(va_block))
                 uxu_try_load_block(va_block, block_retry, service_context, processor_id);
 
             status = uvm_va_block_make_resident(va_block,

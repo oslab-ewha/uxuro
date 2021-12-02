@@ -26,10 +26,6 @@ NV_STATUS uvm_uxu_remap(uvm_va_space_t *va_space,
 			UVM_UXU_REMAP_PARAMS *params);
 NV_STATUS uvm_uxu_unregister_va_range(uvm_va_range_t *va_range);
 
-NV_STATUS uvm_uxu_flush_host_block(uvm_va_space_t *va_space,
-				   uvm_va_range_t *va_range,
-				   uvm_va_block_t *va_block, bool is_evict,
-				   const uvm_page_mask_t *page_mask);
 NV_STATUS uvm_uxu_flush_block(uvm_va_block_t *va_block);
 NV_STATUS uvm_uxu_flush(uvm_va_range_t *va_range);
 NV_STATUS uvm_uxu_release_block(uvm_va_block_t *va_block);
@@ -40,11 +36,6 @@ void uxu_try_load_block(uvm_va_block_t *block,
 			uvm_processor_id_t processor_id);
 
 struct page *uxu_get_page(uvm_va_block_t *block, uvm_page_index_t page_index, bool zero);
-
-NV_STATUS uvm_uxu_read_begin(uvm_va_block_t *va_block,
-			     uvm_va_block_retry_t *block_retry,
-			     uvm_service_block_context_t *service_context);
-NV_STATUS uvm_uxu_read_end(uvm_va_block_t *va_block);
 
 NV_STATUS uvm_uxu_reduce_memory_consumption(uvm_va_space_t *va_space);
 
@@ -69,15 +60,15 @@ uxu_va_block_make_resident(uvm_va_block_t *va_block,
  * @return: true if this va_range is managed by uxu driver, false otherwise.
  */
 static inline bool
-uvm_uxu_is_managed(uvm_va_range_t *va_range)
+uvm_is_uxu_range(uvm_va_range_t *range)
 {
-	return va_range->node.uxu_rtn.filp != NULL;
+	return range->node.uxu_rtn.filp != NULL;
 }
 
 static inline bool
-uxu_is_uxu_block(uvm_va_block_t *block)
+uvm_is_uxu_block(uvm_va_block_t *block)
 {
-	return uvm_uxu_is_managed(block->va_range);
+	return uvm_is_uxu_range(block->va_range);
 }
 
 /**

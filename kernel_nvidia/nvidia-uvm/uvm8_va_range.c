@@ -1157,7 +1157,7 @@ NV_STATUS uvm_va_range_block_create(uvm_va_range_t *va_range, size_t index, uvm_
         else {
             uvm_uxu_va_space_t *uxu_va_space = &va_range->va_space->uxu_va_space;
             INIT_LIST_HEAD(&block->uxu_lru);
-            if (uvm_uxu_is_managed(va_range)) {
+            if (uvm_is_uxu_range(va_range)) {
                 uvm_mutex_lock(&uxu_va_space->lock_blocks);
                 list_move_tail(&block->uxu_lru, &uxu_va_space->lru_head);
                 uvm_mutex_unlock(&uxu_va_space->lock_blocks);
