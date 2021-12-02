@@ -47,22 +47,37 @@ uvm_page_mask_fill(uvm_page_mask_t *mask)
 	bitmap_fill(mask->bitmap, PAGES_PER_UVM_VA_BLOCK);
 }
 
-static int pagecache_reducer(void *ctx)
+/**
+ * Determine if we need to reclaim some blocks or not.
+ *
+ * @param uxu_va_space: the va_space information related to UXU.
+ *
+ * @return: true if we need to reclaim, false otherwise.
+ */
+static inline bool
+uxu_has_to_reclaim_blocks(uvm_uxu_va_space_t *uxu_va_space)
 {
-	uvm_va_space_t *va_space = (uvm_va_space_t *)ctx;
-	uvm_uxu_va_space_t *uxu_va_space = &va_space->uxu_va_space;
-	uvm_thread_context_wrapper_t	thread_context;
+	unsigned long	freeram = global_zone_page_state(NR_FREE_PAGES);
+	unsigned long	pagecacheram = global_zone_page_state(NR_FILE_PAGES);
+	return freeram + pagecacheram < uxu_va_space->trash_reserved_nr_pages;
+}
 
-	uvm_thread_context_add(&thread_context.context);
+/**
+ * Mark that we just touch this block, which has in-buffer data.
+ *
+ * @param va_block: va_block to be marked.
+ */
+static inline void
+uvm_uxu_block_mark_recent_in_buffer(uvm_va_block_t *va_block)
+{
+	uvm_uxu_va_space_t *uxu_va_space = &va_block->va_range->va_space->uxu_va_space;
 
-	while (!kthread_should_stop()) {
-		if (uvm_uxu_has_to_reclaim_blocks(uxu_va_space))
-			uvm_uxu_reduce_memory_consumption(va_space);
-		schedule_timeout_idle(10);
-	}
-
-	uvm_thread_context_remove(&thread_context.context);
-	return 0;
+	// Move this block to the tail of the LRU list.
+	// mutex locking is commented out. It has been already held.
+        uvm_mutex_lock(&uxu_va_space->lock_blocks);
+	if (!list_empty(&va_block->uxu_lru))
+		list_move_tail(&va_block->uxu_lru, &uxu_va_space->lru_head);
+        uvm_mutex_unlock(&uxu_va_space->lock_blocks);
 }
 
 void
@@ -73,191 +88,6 @@ stop_pagecache_reducer(uvm_va_space_t *va_space)
 		kthread_stop(uxu_va_space->reducer);
 		uxu_va_space->reducer = NULL;
 	}
-}
-
-/**
- * Initialize the UXU module. This function has to be called once per
- * va_space. It must be called before calling
- * "uvm_uxu_register_file_va_space"
- *
- * @param va_space: va_space to be initialized this module with.
- *
- * @param trash_nr_blocks: maximum number of va_block UXU should evict out
- * at one time.
- *
- * @param trash_reserved_nr_pages: UXU will automatically evicts va_block
- * when number of free pages plus number of page-cache pages less than this
- * value.
- *
- * @param flags: the flags that dictate the optimization behaviors. See
- * UVM_UXU_INIT_* for more details.
- *
- * @return: NV_ERR_INVALID_OPERATION if `va_space` has been initialized already,
- * otherwise NV_OK.
- */
-NV_STATUS
-uvm_uxu_initialize(uvm_va_space_t *va_space, unsigned long trash_nr_blocks, unsigned long trash_reserved_nr_pages, unsigned short flags)
-{
-	uvm_uxu_va_space_t *uxu_va_space = &va_space->uxu_va_space;
-
-	if (!uxu_va_space->is_initailized) {
-		INIT_LIST_HEAD(&uxu_va_space->lru_head);
-		/* TODO: Lower down the locking order.
-		 * Because invalid locking order warnings are generated when debug mode is enabled.
-		 */
-		uvm_mutex_init(&uxu_va_space->lock, UVM_LOCK_ORDER_VA_SPACE);
-		uvm_mutex_init(&uxu_va_space->lock_blocks, UVM_LOCK_ORDER_VA_SPACE_UXU);
-		uxu_va_space->trash_nr_blocks = trash_nr_blocks;
-		uxu_va_space->trash_reserved_nr_pages = trash_reserved_nr_pages;
-		uxu_va_space->flags = flags;
-		uxu_va_space->is_initailized = true;
-
-		uxu_va_space->reducer = kthread_run(pagecache_reducer, va_space, "reducer");
-		return NV_OK;
-	}
-	else
-		return NV_ERR_INVALID_OPERATION;
-}
-
-/**
- * Register a file to this `va_space`.
- * UXU will start tracking this UVM region if this function return success.
- *
- * @param va_space: va_space to register the file to.
- *
- * @param params: register parameters containing info about the file, size, etc.
- *
- * @return: NV_OK on success, NV_ERR_* otherwise.
- */
-NV_STATUS
-uvm_uxu_map(uvm_va_space_t *va_space, UVM_UXU_MAP_PARAMS *params)
-{
-	uvm_uxu_range_tree_node_t	*uxu_rtn;
-
-	uvm_range_tree_node_t	*node = uvm_range_tree_find(&va_space->va_range_tree, (NvU64)params->uvm_addr);
-	NvU64	expected_start_addr = (NvU64)params->uvm_addr;
-	NvU64	expected_end_addr = expected_start_addr + params->size - 1;
-
-	size_t	max_nr_blocks;
-
-	// Make sure that uvm_uxu_initialize is called before this function.
-	if (!va_space->uxu_va_space.is_initailized) {
-		printk(KERN_DEBUG "Error: Call uvm_uxu_register_file_va_space before uvm_uxu_initialize\n");
-		return NV_ERR_INVALID_OPERATION;
-	}
-
-	// Find uvm node associated with the specified UVM address range.
-	if (node == NULL) {
-		printk(KERN_DEBUG "Error: no matching va range for 0x%llx-0x%llx\n", expected_start_addr, expected_end_addr);
-		return NV_ERR_OPERATING_SYSTEM;
-	}
-	// It would be OK if a va range includes the UVM address range.
-	if (node->end < expected_end_addr) {
-		printk(KERN_DEBUG "Cannot find uvm range 0x%llx - 0x%llx\n", expected_start_addr, expected_end_addr);
-		if (node)
-			printk(KERN_DEBUG "Closet uvm range 0x%llx - 0x%llx\n", node->start, node->end);
-		return NV_ERR_OPERATING_SYSTEM;
-	}
-
-	uxu_rtn = &node->uxu_rtn;
-
-	// Get the struct file from the input file descriptor.
-	if ((uxu_rtn->filp = fget(params->backing_fd)) == NULL) {
-		printk(KERN_DEBUG "Cannot find the backing fd: %d\n", params->backing_fd);
-		return NV_ERR_OPERATING_SYSTEM;
-	}
-
-	// Record the flags and the file size.
-	uxu_rtn->flags = params->flags;
-	uxu_rtn->size = params->size;
-
-	// Calculate the number of blocks associated with this UVM range.
-	max_nr_blocks = uvm_va_range_num_blocks(container_of(node, uvm_va_range_t, node));
-
-	uxu_rtn->iov = kmalloc(sizeof(struct iovec) * PAGES_PER_UVM_VA_BLOCK, GFP_KERNEL);
-	if (!uxu_rtn->iov) {
-		fput(uxu_rtn->filp);
-		uxu_rtn->filp = NULL;
-		return NV_ERR_NO_MEMORY;
-	}
-
-	return NV_OK;
-}
-
-NV_STATUS
-uvm_uxu_remap(uvm_va_space_t *va_space, UVM_UXU_REMAP_PARAMS *params)
-{
-	uvm_uxu_range_tree_node_t	*uxu_rtn;
-	uvm_va_block_t	*va_block, *va_block_next;
-	uvm_uxu_va_space_t	*uxu_va_space = &va_space->uxu_va_space;
-
-	uvm_va_range_t	*va_range = uvm_va_range_find(va_space, (NvU64)params->uvm_addr);
-	NvU64	expected_start_addr = (NvU64)params->uvm_addr;
-
-	// Make sure that uvm_uxu_initialize is called before this function.
-	if (!va_space->uxu_va_space.is_initailized) {
-		printk(KERN_DEBUG "Error: Call uvm_uxu_remap before uvm_uxu_initialize\n");
-		return NV_ERR_INVALID_OPERATION;
-	}
-
-	if (!va_range || va_range->node.start != expected_start_addr) {
-		printk(KERN_DEBUG "Cannot find uvm whose address starts from 0x%llx\n", expected_start_addr);
-		if (va_range)
-			printk(KERN_DEBUG "Closet uvm range 0x%llx - 0x%llx\n", va_range->node.start, va_range->node.end);
-		return NV_ERR_OPERATING_SYSTEM;
-	}
-
-	uxu_rtn = &va_range->node.uxu_rtn;
-
-	if (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE)
-		uvm_mutex_lock(&uxu_va_space->lock);
-
-	// Volatile data is simply discarded even though it has been remapped with non-volatile
-	for_each_va_block_in_va_range_safe(va_range, va_block, va_block_next) {
-		va_block->is_dirty = false;
-		if (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE) {
-			uvm_uxu_release_block(va_block);
-			list_del(&va_block->uxu_lru);
-		}
-	}
-
-	if (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE)
-		uvm_mutex_unlock(&uxu_va_space->lock);
-
-	uxu_rtn->flags = params->flags;
-
-	return NV_OK;
-}
-
-/**
- * Unregister the specified va_range.
- * UXU will stop tracking this `va_range` after this point.
- *
- * @param va_range: va_range to be untracked.
- *
- * @return: always NV_OK.
- */
-NV_STATUS
-uvm_uxu_unregister_va_range(uvm_va_range_t *va_range)
-{
-	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_range->node.uxu_rtn;
-	struct file	*filp = uxu_rtn->filp;
-
-	UVM_ASSERT(filp != NULL);
-
-	if ((va_range->node.uxu_rtn.flags & UVM_UXU_FLAG_WRITE) && !(va_range->node.uxu_rtn.flags & UVM_UXU_FLAG_VOLATILE)) {
-		uvm_uxu_flush(va_range);
-        }
-
-	if (uxu_rtn->iov)
-		kfree(uxu_rtn->iov);
-
-	if ((uxu_rtn->flags & UVM_UXU_FLAG_WRITE) && !(uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE))
-		vfs_fsync(filp, 1);
-
-	fput(filp);
-
-	return NV_OK;
 }
 
 static void
@@ -811,8 +641,8 @@ uxu_try_load_block(uvm_va_block_t *block, uvm_va_block_retry_t *block_retry, uvm
  *
  * @return: NV_OK on success. NV_ERR_* otherwise.
  */
-NV_STATUS
-uvm_uxu_flush_block(uvm_va_block_t *va_block)
+static NV_STATUS
+uxu_flush_block(uvm_va_block_t *va_block)
 {
 	NV_STATUS	status = NV_OK;
 	uvm_va_range_t	*va_range = va_block->va_range;
@@ -862,15 +692,15 @@ uvm_uxu_flush_block(uvm_va_block_t *va_block)
  *
  * @return: NV_OK on success. NV_ERR_* otherwise.
  */
-NV_STATUS
-uvm_uxu_flush(uvm_va_range_t *va_range)
+static NV_STATUS
+uxu_flush(uvm_va_range_t *va_range)
 {
 	NV_STATUS	status = NV_OK;
 	uvm_va_block_t	*va_block, *va_block_next;
 
 	// Evict blocks one by one.
 	for_each_va_block_in_va_range_safe(va_range, va_block, va_block_next) {
-		if ((status = uvm_uxu_flush_block(va_block)) != NV_OK) {
+		if ((status = uxu_flush_block(va_block)) != NV_OK) {
 			printk(KERN_DEBUG "Encountered a problem with uvm_uxu_flush_block\n");
 			break;
 		}
@@ -880,13 +710,44 @@ uvm_uxu_flush(uvm_va_range_t *va_range)
 }
 
 /**
+ * Unregister the specified va_range.
+ * UXU will stop tracking this `va_range` after this point.
+ *
+ * @param va_range: va_range to be untracked.
+ *
+ * @return: always NV_OK.
+ */
+NV_STATUS
+uvm_uxu_unregister_va_range(uvm_va_range_t *va_range)
+{
+	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_range->node.uxu_rtn;
+	struct file	*filp = uxu_rtn->filp;
+
+	UVM_ASSERT(filp != NULL);
+
+	if ((va_range->node.uxu_rtn.flags & UVM_UXU_FLAG_WRITE) && !(va_range->node.uxu_rtn.flags & UVM_UXU_FLAG_VOLATILE)) {
+		uxu_flush(va_range);
+        }
+
+	if (uxu_rtn->iov)
+		kfree(uxu_rtn->iov);
+
+	if ((uxu_rtn->flags & UVM_UXU_FLAG_WRITE) && !(uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE))
+		vfs_fsync(filp, 1);
+
+	fput(filp);
+
+	return NV_OK;
+}
+
+/**
  * Free memory associated with the `va_block`.
  *
  * @param va_block: va_block to be freed.
  *
  * @return: always NV_OK;
  */
-NV_STATUS
+static NV_STATUS
 uvm_uxu_release_block(uvm_va_block_t *va_block)
 {
 	uvm_va_block_t	*old;
@@ -1212,8 +1073,8 @@ uvm_uxu_set_page_dirty(struct page *page)
  *
  * @return: NV_OK on success, NV_ERR_* otherwise.
  */
-NV_STATUS
-uvm_uxu_reduce_memory_consumption(uvm_va_space_t *va_space)
+static NV_STATUS
+uxu_reduce_memory_consumption(uvm_va_space_t *va_space)
 {
 	/*
 	 * TODO: locking assertion failed. write lock is required.
@@ -1263,30 +1124,201 @@ uvm_uxu_reduce_memory_consumption(uvm_va_space_t *va_space)
 	return status;
 }
 
-NV_STATUS uvm_api_uxu_initialize(UVM_UXU_INITIALIZE_PARAMS *params, struct file *filp)
+static int
+pagecache_reducer(void *ctx)
 {
-    uvm_va_space_t *va_space = uvm_va_space_get(filp);
-    return uvm_uxu_initialize(
-        va_space,
-        params->trash_nr_blocks,
-        params->trash_reserved_nr_pages,
-        params->flags
-    );
+	uvm_va_space_t	*va_space = (uvm_va_space_t *)ctx;
+	uvm_uxu_va_space_t	*uxu_va_space = &va_space->uxu_va_space;
+	uvm_thread_context_wrapper_t	thread_context;
+
+	uvm_thread_context_add(&thread_context.context);
+
+	while (!kthread_should_stop()) {
+		if (uxu_has_to_reclaim_blocks(uxu_va_space))
+			uxu_reduce_memory_consumption(va_space);
+		schedule_timeout_idle(10);
+	}
+
+	uvm_thread_context_remove(&thread_context.context);
+	return 0;
 }
 
-NV_STATUS uvm_api_uxu_map(UVM_UXU_MAP_PARAMS *params, struct file *filp)
+/**
+ * Initialize the UXU module. This function has to be called once per
+ * va_space. It must be called before calling
+ * "uvm_uxu_register_file_va_space"
+ *
+ * @param va_space: va_space to be initialized this module with.
+ *
+ * @param trash_nr_blocks: maximum number of va_block UXU should evict out
+ * at one time.
+ *
+ * @param trash_reserved_nr_pages: UXU will automatically evicts va_block
+ * when number of free pages plus number of page-cache pages less than this
+ * value.
+ *
+ * @param flags: the flags that dictate the optimization behaviors. See
+ * UVM_UXU_INIT_* for more details.
+ *
+ * @return: NV_ERR_INVALID_OPERATION if `va_space` has been initialized already,
+ * otherwise NV_OK.
+ */
+static NV_STATUS
+uxu_initialize(uvm_va_space_t *va_space, unsigned long trash_nr_blocks, unsigned long trash_reserved_nr_pages, unsigned short flags)
 {
-    uvm_va_space_t *va_space = uvm_va_space_get(filp);
+	uvm_uxu_va_space_t *uxu_va_space = &va_space->uxu_va_space;
 
-    /* TODO: need check private data of dragon file */
+	if (!uxu_va_space->is_initailized) {
+		INIT_LIST_HEAD(&uxu_va_space->lru_head);
+		/* TODO: Lower down the locking order.
+		 * Because invalid locking order warnings are generated when debug mode is enabled.
+		 */
+		uvm_mutex_init(&uxu_va_space->lock, UVM_LOCK_ORDER_VA_SPACE);
+		uvm_mutex_init(&uxu_va_space->lock_blocks, UVM_LOCK_ORDER_VA_SPACE_UXU);
+		uxu_va_space->trash_nr_blocks = trash_nr_blocks;
+		uxu_va_space->trash_reserved_nr_pages = trash_reserved_nr_pages;
+		uxu_va_space->flags = flags;
+		uxu_va_space->is_initailized = true;
 
-    return uvm_uxu_map(va_space, params);
+		uxu_va_space->reducer = kthread_run(pagecache_reducer, va_space, "reducer");
+		return NV_OK;
+	}
+	else
+		return NV_ERR_INVALID_OPERATION;
 }
 
-NV_STATUS uvm_api_uxu_remap(UVM_UXU_REMAP_PARAMS *params, struct file *filp)
+/**
+ * Register a file to this `va_space`.
+ * UXU will start tracking this UVM region if this function return success.
+ *
+ * @param va_space: va_space to register the file to.
+ *
+ * @param params: register parameters containing info about the file, size, etc.
+ *
+ * @return: NV_OK on success, NV_ERR_* otherwise.
+ */
+static NV_STATUS
+uxu_map(uvm_va_space_t *va_space, UVM_UXU_MAP_PARAMS *params)
 {
-    uvm_va_space_t *va_space = uvm_va_space_get(filp);
-    return uvm_uxu_remap(va_space, params);
+	uvm_uxu_range_tree_node_t	*uxu_rtn;
+
+	uvm_range_tree_node_t	*node = uvm_range_tree_find(&va_space->va_range_tree, (NvU64)params->uvm_addr);
+	NvU64	expected_start_addr = (NvU64)params->uvm_addr;
+	NvU64	expected_end_addr = expected_start_addr + params->size - 1;
+
+	size_t	max_nr_blocks;
+
+	// Make sure that uvm_uxu_initialize is called before this function.
+	if (!va_space->uxu_va_space.is_initailized) {
+		printk(KERN_DEBUG "Error: Call uvm_uxu_register_file_va_space before uvm_uxu_initialize\n");
+		return NV_ERR_INVALID_OPERATION;
+	}
+
+	// Find uvm node associated with the specified UVM address range.
+	if (node == NULL) {
+		printk(KERN_DEBUG "Error: no matching va range for 0x%llx-0x%llx\n", expected_start_addr, expected_end_addr);
+		return NV_ERR_OPERATING_SYSTEM;
+	}
+	// It would be OK if a va range includes the UVM address range.
+	if (node->end < expected_end_addr) {
+		printk(KERN_DEBUG "Cannot find uvm range 0x%llx - 0x%llx\n", expected_start_addr, expected_end_addr);
+		if (node)
+			printk(KERN_DEBUG "Closet uvm range 0x%llx - 0x%llx\n", node->start, node->end);
+		return NV_ERR_OPERATING_SYSTEM;
+	}
+
+	uxu_rtn = &node->uxu_rtn;
+
+	// Get the struct file from the input file descriptor.
+	if ((uxu_rtn->filp = fget(params->backing_fd)) == NULL) {
+		printk(KERN_DEBUG "Cannot find the backing fd: %d\n", params->backing_fd);
+		return NV_ERR_OPERATING_SYSTEM;
+	}
+
+	// Record the flags and the file size.
+	uxu_rtn->flags = params->flags;
+	uxu_rtn->size = params->size;
+
+	// Calculate the number of blocks associated with this UVM range.
+	max_nr_blocks = uvm_va_range_num_blocks(container_of(node, uvm_va_range_t, node));
+
+	uxu_rtn->iov = kmalloc(sizeof(struct iovec) * PAGES_PER_UVM_VA_BLOCK, GFP_KERNEL);
+	if (!uxu_rtn->iov) {
+		fput(uxu_rtn->filp);
+		uxu_rtn->filp = NULL;
+		return NV_ERR_NO_MEMORY;
+	}
+
+	return NV_OK;
+}
+
+static NV_STATUS
+uxu_remap(uvm_va_space_t *va_space, UVM_UXU_REMAP_PARAMS *params)
+{
+	uvm_uxu_range_tree_node_t	*uxu_rtn;
+	uvm_va_block_t	*va_block, *va_block_next;
+	uvm_uxu_va_space_t	*uxu_va_space = &va_space->uxu_va_space;
+
+	uvm_va_range_t	*va_range = uvm_va_range_find(va_space, (NvU64)params->uvm_addr);
+	NvU64	expected_start_addr = (NvU64)params->uvm_addr;
+
+	// Make sure that uvm_uxu_initialize is called before this function.
+	if (!va_space->uxu_va_space.is_initailized) {
+		printk(KERN_DEBUG "Error: Call uvm_uxu_remap before uvm_uxu_initialize\n");
+		return NV_ERR_INVALID_OPERATION;
+	}
+
+	if (!va_range || va_range->node.start != expected_start_addr) {
+		printk(KERN_DEBUG "Cannot find uvm whose address starts from 0x%llx\n", expected_start_addr);
+		if (va_range)
+			printk(KERN_DEBUG "Closet uvm range 0x%llx - 0x%llx\n", va_range->node.start, va_range->node.end);
+		return NV_ERR_OPERATING_SYSTEM;
+	}
+
+	uxu_rtn = &va_range->node.uxu_rtn;
+
+	if (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE)
+		uvm_mutex_lock(&uxu_va_space->lock);
+
+	// Volatile data is simply discarded even though it has been remapped with non-volatile
+	for_each_va_block_in_va_range_safe(va_range, va_block, va_block_next) {
+		va_block->is_dirty = false;
+		if (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE) {
+			uvm_uxu_release_block(va_block);
+			list_del(&va_block->uxu_lru);
+		}
+	}
+
+	if (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE)
+		uvm_mutex_unlock(&uxu_va_space->lock);
+
+	uxu_rtn->flags = params->flags;
+
+	return NV_OK;
+}
+
+NV_STATUS
+uvm_api_uxu_initialize(UVM_UXU_INITIALIZE_PARAMS *params, struct file *filp)
+{
+	uvm_va_space_t *va_space = uvm_va_space_get(filp);
+	return uxu_initialize(va_space, params->trash_nr_blocks, params->trash_reserved_nr_pages, params->flags);
+}
+
+NV_STATUS
+uvm_api_uxu_map(UVM_UXU_MAP_PARAMS *params, struct file *filp)
+{
+	uvm_va_space_t *va_space = uvm_va_space_get(filp);
+
+	/* TODO: need check private data of dragon file */
+
+	return uxu_map(va_space, params);
+}
+
+NV_STATUS
+uvm_api_uxu_remap(UVM_UXU_REMAP_PARAMS *params, struct file *filp)
+{
+	uvm_va_space_t *va_space = uvm_va_space_get(filp);
+	return uxu_remap(va_space, params);
 }
 
 NV_STATUS
