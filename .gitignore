@@ -45,8 +45,7 @@ Makefile
 /tests/sanity-basic/Makefile
 /tests/sanity-basic/readtest
 /tests/sanity-basic/writetest
-/tests/unit-test/basictest
-/tests/unit-test/overscription
+/tests/unit-test/ut-*
 /tests/unit-test/*.log
 /tests/unit-test/*.trs
 /tests/unit-test/site.bak

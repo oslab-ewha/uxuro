@@ -86,8 +86,8 @@ POST_INSTALL = :
 NORMAL_UNINSTALL = :
 PRE_UNINSTALL = :
 POST_UNINSTALL = :
-TESTS = basictest$(EXEEXT)
-noinst_PROGRAMS = basictest$(EXEEXT) overscription$(EXEEXT)
+noinst_PROGRAMS = ut-readonly$(EXEEXT) ut-writeonly$(EXEEXT) \
+	ut-readwrite$(EXEEXT) ut-overscription$(EXEEXT)
 subdir = tests/unit-test
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/cuda.m4 \
@@ -100,16 +100,26 @@ CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 PROGRAMS = $(noinst_PROGRAMS)
-am_basictest_OBJECTS = basictest.$(OBJEXT)
-basictest_OBJECTS = $(am_basictest_OBJECTS)
-basictest_LDADD = $(LDADD)
+am_ut_overscription_OBJECTS = ut-overscription.$(OBJEXT)
+ut_overscription_OBJECTS = $(am_ut_overscription_OBJECTS)
+ut_overscription_LDADD = $(LDADD)
 am__DEPENDENCIES_1 =
-basictest_DEPENDENCIES = $(top_srcdir)/library/libuxu.a \
+ut_overscription_DEPENDENCIES = $(top_srcdir)/library/libuxu.a \
 	$(am__DEPENDENCIES_1) ../../examples/common/libutil.a
-am_overscription_OBJECTS = overscription.$(OBJEXT)
-overscription_OBJECTS = $(am_overscription_OBJECTS)
-overscription_LDADD = $(LDADD)
-overscription_DEPENDENCIES = $(top_srcdir)/library/libuxu.a \
+am_ut_readonly_OBJECTS = ut-readonly.$(OBJEXT)
+ut_readonly_OBJECTS = $(am_ut_readonly_OBJECTS)
+ut_readonly_LDADD = $(LDADD)
+ut_readonly_DEPENDENCIES = $(top_srcdir)/library/libuxu.a \
+	$(am__DEPENDENCIES_1) ../../examples/common/libutil.a
+am_ut_readwrite_OBJECTS = ut-readwrite.$(OBJEXT)
+ut_readwrite_OBJECTS = $(am_ut_readwrite_OBJECTS)
+ut_readwrite_LDADD = $(LDADD)
+ut_readwrite_DEPENDENCIES = $(top_srcdir)/library/libuxu.a \
+	$(am__DEPENDENCIES_1) ../../examples/common/libutil.a
+am_ut_writeonly_OBJECTS = ut-writeonly.$(OBJEXT)
+ut_writeonly_OBJECTS = $(am_ut_writeonly_OBJECTS)
+ut_writeonly_LDADD = $(LDADD)
+ut_writeonly_DEPENDENCIES = $(top_srcdir)/library/libuxu.a \
 	$(am__DEPENDENCIES_1) ../../examples/common/libutil.a
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
@@ -124,8 +134,10 @@ am__v_at_ = $(am__v_at_@AM_DEFAULT_V@)
 am__v_at_0 = @
 am__v_at_1 = 
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
-SOURCES = $(basictest_SOURCES) $(overscription_SOURCES)
-DIST_SOURCES = $(basictest_SOURCES) $(overscription_SOURCES)
+SOURCES = $(ut_overscription_SOURCES) $(ut_readonly_SOURCES) \
+	$(ut_readwrite_SOURCES) $(ut_writeonly_SOURCES)
+DIST_SOURCES = $(ut_overscription_SOURCES) $(ut_readonly_SOURCES) \
+	$(ut_readwrite_SOURCES) $(ut_writeonly_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -469,10 +481,15 @@ top_srcdir = @top_srcdir@
 AUTOMAKE_OPTIONS = dejagnu
 CLEANFILES = *~
 DISTCLEANFILES = *~
-basictest_SOURCES = basictest.cu
-basictest_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
-overscription_SOURCES = overscription.cu
-overscription_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
+TESTS = basictest
+ut_readonly_SOURCES = ut-readonly.cu
+ut_readonly_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
+ut_writeonly_SOURCES = ut-writeonly.cu
+ut_writeonly_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
+ut_readwrite_SOURCES = ut-readwrite.cu
+ut_readwrite_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
+ut_overscription_SOURCES = ut-overscription.cu
+ut_overscription_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
 AM_CPPFLAGS = -I$(top_srcdir)/library -I../../examples/common
 LDADD = $(top_srcdir)/library/libuxu.a $(GLIB_LIBS) ../../examples/common/libutil.a
 all: all-am
@@ -513,13 +530,21 @@ $(am__aclocal_m4_deps):
 clean-noinstPROGRAMS:
 	-test -z "$(noinst_PROGRAMS)" || rm -f $(noinst_PROGRAMS)
 
-basictest$(EXEEXT): $(basictest_OBJECTS) $(basictest_DEPENDENCIES) $(EXTRA_basictest_DEPENDENCIES) 
-	@rm -f basictest$(EXEEXT)
-	$(AM_V_GEN)$(basictest_LINK) $(basictest_OBJECTS) $(basictest_LDADD) $(LIBS)
+ut-overscription$(EXEEXT): $(ut_overscription_OBJECTS) $(ut_overscription_DEPENDENCIES) $(EXTRA_ut_overscription_DEPENDENCIES) 
+	@rm -f ut-overscription$(EXEEXT)
+	$(AM_V_GEN)$(ut_overscription_LINK) $(ut_overscription_OBJECTS) $(ut_overscription_LDADD) $(LIBS)
 
-overscription$(EXEEXT): $(overscription_OBJECTS) $(overscription_DEPENDENCIES) $(EXTRA_overscription_DEPENDENCIES) 
-	@rm -f overscription$(EXEEXT)
-	$(AM_V_GEN)$(overscription_LINK) $(overscription_OBJECTS) $(overscription_LDADD) $(LIBS)
+ut-readonly$(EXEEXT): $(ut_readonly_OBJECTS) $(ut_readonly_DEPENDENCIES) $(EXTRA_ut_readonly_DEPENDENCIES) 
+	@rm -f ut-readonly$(EXEEXT)
+	$(AM_V_GEN)$(ut_readonly_LINK) $(ut_readonly_OBJECTS) $(ut_readonly_LDADD) $(LIBS)
+
+ut-readwrite$(EXEEXT): $(ut_readwrite_OBJECTS) $(ut_readwrite_DEPENDENCIES) $(EXTRA_ut_readwrite_DEPENDENCIES) 
+	@rm -f ut-readwrite$(EXEEXT)
+	$(AM_V_GEN)$(ut_readwrite_LINK) $(ut_readwrite_OBJECTS) $(ut_readwrite_LDADD) $(LIBS)
+
+ut-writeonly$(EXEEXT): $(ut_writeonly_OBJECTS) $(ut_writeonly_DEPENDENCIES) $(EXTRA_ut_writeonly_DEPENDENCIES) 
+	@rm -f ut-writeonly$(EXEEXT)
+	$(AM_V_GEN)$(ut_writeonly_LINK) $(ut_writeonly_OBJECTS) $(ut_writeonly_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -758,8 +783,8 @@ recheck: all
 	        am__force_recheck=am--force-recheck \
 	        TEST_LOGS="$$log_list"; \
 	exit $$?
-basictest.log: basictest$(EXEEXT)
-	@p='basictest$(EXEEXT)'; \
+basictest.log: basictest
+	@p='basictest'; \
 	b='basictest'; \
 	$(am__check_pre) $(LOG_DRIVER) --test-name "$$f" \
 	--log-file $$b.log --trs-file $$b.trs \
@@ -935,6 +960,8 @@ uninstall-am:
 
 .PRECIOUS: Makefile
 
+
+ut-readonly.o ut-writeonly ut-readwrite.o ut-overscription.o: unit_test.h
 .cu.o:
 	@NVCC_PATH@ -dc $(AM_CPPFLAGS) --maxrregcount 32 @NVCC_CPPFLAGS@ @NVCC_ARCHITECTURE@ $< -o $@
 
