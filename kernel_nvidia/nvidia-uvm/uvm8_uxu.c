@@ -775,7 +775,7 @@ uvm_uxu_release_block(uvm_va_block_t *va_block)
 }
 
 static NV_STATUS
-uvm_uxu_write_begin(uvm_va_block_t *va_block, bool is_flush, void *fsdata_array[])
+uxu_write_begin(uvm_va_block_t *va_block, bool is_flush, void *fsdata_array[])
 {
 	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_block->va_range->node.uxu_rtn;
 	int		page_id;
@@ -871,7 +871,7 @@ uvm_uxu_write_begin(uvm_va_block_t *va_block, bool is_flush, void *fsdata_array[
 }
 
 static NV_STATUS
-uvm_uxu_write_end(uvm_va_block_t *va_block, bool is_flush, void *fsdata_array[])
+uxu_write_end(uvm_va_block_t *va_block, bool is_flush, void *fsdata_array[])
 {
 	NV_STATUS	status = NV_OK;
 
@@ -926,33 +926,27 @@ uxu_va_block_make_resident(uvm_va_block_t *va_block,
 			   const uvm_page_mask_t *prefetch_page_mask,
 			   uvm_make_resident_cause_t cause)
 {
-	bool	do_uxu_write = false;
-	NV_STATUS	status;
 	uxu_fsdata_array_t	*pfsdata_array;
+	NV_STATUS	status;
 
-	if (!uvm_is_uxu_block(va_block))
+	if (!uvm_is_uxu_block(va_block) || uxu_is_write_block(va_block) ||
+	    (cause != UVM_MAKE_RESIDENT_CAUSE_EVICTION && (cause != UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE || UVM_ID_IS_CPU(dest_id))))
 		return uvm_va_block_make_resident(va_block, va_block_retry, va_block_context, dest_id, region, page_mask, prefetch_page_mask, cause);
+
+	if (!va_block->is_dirty && uxu_is_volatile_block(va_block)) {
+		uvm_uxu_block_mark_recent_in_buffer(va_block);
+		return uvm_va_block_make_resident(va_block, va_block_retry, va_block_context, dest_id, region, page_mask, prefetch_page_mask, cause);
+	}
 
 	pfsdata_array = kmem_cache_alloc(g_uxu_fsdata_array_cache, NV_UVM_GFP_FLAGS);
 	if (pfsdata_array == NULL)
 		return NV_ERR_NO_MEMORY;
 
-	if (uvm_uxu_need_to_evict_from_gpu(va_block) &&
-	    (cause == UVM_MAKE_RESIDENT_CAUSE_EVICTION || (cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && UVM_ID_IS_CPU(dest_id)))) {
-		uvm_uxu_range_tree_node_t *uxu_rtn = &va_block->va_range->node.uxu_rtn;
-
-		if (!va_block->is_dirty && (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE)) {
-			uvm_uxu_block_mark_recent_in_buffer(va_block);
-		}
-		else {
-			uvm_uxu_write_begin(va_block, cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE, *pfsdata_array);
-			do_uxu_write = true;
-		}
-	}
+	uxu_write_begin(va_block, cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE, *pfsdata_array);
 	status = uvm_va_block_make_resident(va_block, va_block_retry, va_block_context, dest_id, region, page_mask, prefetch_page_mask, cause);
 	if (status == NV_OK)
 		status = uvm_tracker_wait(&va_block->tracker);
-	uvm_uxu_write_end(va_block, cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE, *pfsdata_array);
+	uxu_write_end(va_block, cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE, *pfsdata_array);
 	kmem_cache_free(g_uxu_fsdata_array_cache, pfsdata_array);
 
 	return status;

@@ -59,6 +59,19 @@ uvm_is_uxu_block(uvm_va_block_t *block)
 }
 
 static inline bool
+uxu_check_flag(uvm_va_block_t *block, unsigned short flag)
+{
+	uvm_uxu_range_tree_node_t	*uxu_rtn = &block->va_range->node.uxu_rtn;
+
+	if (uxu_rtn->flags & flag)
+		return true;
+	return false;
+}
+
+#define uxu_is_write_block(block)	uxu_check_flag(block, UVM_UXU_FLAG_WRITE)
+#define uxu_is_volatile_block(block)	uxu_check_flag(block, UVM_UXU_FLAG_VOLATILE)
+
+static inline bool
 uvm_uxu_need_to_evict_from_gpu(uvm_va_block_t *va_block)
 {
 	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_block->va_range->node.uxu_rtn;
