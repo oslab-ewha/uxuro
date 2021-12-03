@@ -36,7 +36,7 @@
 #include "uvm8_uxu.h"
 
 #define UXU_FILE_FROM_BLOCK(block)	((block)->va_range->node.uxu_rtn.filp);
-#define BLOCK_START_OFFSET(block)	((block)->start - (block)->va_range->node.start);
+#define BLOCK_START_OFFSET(block)	((block)->start - (block)->va_range->node.start)
 
 #define MIN(x, y) ((x) < (y) ? (x): (y))
 
@@ -161,234 +161,6 @@ error:
 	return status;
 }
 
-/**
- * Inspired by generic_file_buffered_read in /mm/filemap.c.
- */
-static int
-read_block_page(struct file *filp, loff_t ppos, uvm_va_block_t *block, int page_id)
-{
-	struct address_space	*mapping = filp->f_mapping;
-	struct inode	*inode = mapping->host;
-	struct file_ra_state	*ra = &filp->f_ra;
-	pgoff_t	index, index_last, index_prev;
-	unsigned long	offset;      /* offset into pagecache page */
-	unsigned int	prev_offset;
-	int	error = 0;
-
-	index = ppos >> PAGE_SHIFT;
-	index_prev = ra->prev_pos >> PAGE_SHIFT;
-	prev_offset = ra->prev_pos & (PAGE_SIZE-1);
-	index_last = (ppos + PAGE_SIZE + PAGE_SIZE-1) >> PAGE_SHIFT;
-	offset = ppos & ~PAGE_MASK;
-
-	for (;;) {
-		struct page	*page;
-		pgoff_t	end_index;
-		loff_t	isize;
-		unsigned long	nr;
-		NV_STATUS	ret;
-
-		cond_resched();
-find_page:
-		if (fatal_signal_pending(current)) {
-			error = -EINTR;
-			goto out;
-		}
-
-		page = find_get_page(mapping, index);
-		if (!page) {
-			page_cache_sync_readahead(mapping, ra, filp, index, index_last - index);
-			page = find_get_page(mapping, index);
-			if (unlikely(page == NULL))
-				goto no_cached_page;
-		}
-		if (PageReadahead(page)) {
-			page_cache_async_readahead(mapping, ra, filp, page, index, index_last - index);
-		}
-		if (!PageUptodate(page)) {
-			/*
-			 * See comment in do_read_cache_page on why
-			 * wait_on_page_locked is used to avoid unnecessarily
-			 * serialisations and why it's safe.
-			 */
-			error = wait_on_page_locked_killable(page);
-			if (unlikely(error))
-				goto readpage_error;
-			if (PageUptodate(page))
-				goto page_ok;
-
-			if (inode->i_blkbits == PAGE_SHIFT ||
-			    !mapping->a_ops->is_partially_uptodate)
-				goto page_not_up_to_date;
-			if (!trylock_page(page))
-				goto page_not_up_to_date;
-			/* Did it get truncated before we got the lock? */
-			if (!page->mapping)
-				goto page_not_up_to_date_locked;
-			if (!mapping->a_ops->is_partially_uptodate(page, offset, PAGE_SIZE))
-				goto page_not_up_to_date_locked;
-			unlock_page(page);
-		}
-page_ok:
-		/*
-		 * i_size must be checked after we know the page is Uptodate.
-		 *
-		 * Checking i_size after the check allows us to calculate
-		 * the correct value for "nr", which means the zero-filled
-		 * part of the page is not copied back to userspace (unless
-		 * another truncate extends the file - this is desired though).
-		 */
-
-		isize = i_size_read(inode);
-		end_index = (isize - 1) >> PAGE_SHIFT;
-		if (unlikely(!isize || index > end_index)) {
-			put_page(page);
-			goto out;
-		}
-
-		/* nr is the maximum number of bytes to copy from this page */
-		nr = PAGE_SIZE;
-		if (index == end_index) {
-			nr = ((isize - 1) & ~PAGE_MASK) + 1;
-			if (nr <= offset) {
-				put_page(page);
-				goto out;
-			}
-		}
-		nr = nr - offset;
-
-		/* If users can be writing to this page using arbitrary
-		 * virtual addresses, take care about potential aliasing
-		 * before reading the page on the kernel side.
-		 */
-		if (mapping_writably_mapped(mapping))
-			flush_dcache_page(page);
-
-		/*
-		 * When a sequential read accesses a page several times,
-		 * only mark it as accessed the first time.
-		 */
-		if (index_prev != index || offset != prev_offset)
-			mark_page_accessed(page);
-		index_prev = index;
-
-		/*
-		 * Ok, we have the page, and it's up-to-date, so
-		 * now we can insert it to the va_block...
-		 */
-		ret = add_pagecache_to_block(block, page_id, page);
-		if (ret != NV_OK) {
-			error = ret;
-			goto out;
-		}
-
-		offset += PAGE_SIZE;
-		index += offset >> PAGE_SHIFT;
-		offset &= ~PAGE_MASK;
-		prev_offset = offset;
-
-		goto out;
-
-page_not_up_to_date:
-		/* Get exclusive access to the page ... */
-		error = lock_page_killable(page);
-		if (unlikely(error))
-			goto readpage_error;
-
-page_not_up_to_date_locked:
-		/* Did it get truncated before we got the lock? */
-		if (!page->mapping) {
-			unlock_page(page);
-			put_page(page);
-			continue;
-		}
-
-		/* Did somebody else fill it already? */
-		if (PageUptodate(page)) {
-			unlock_page(page);
-			goto page_ok;
-		}
-
-readpage:
-		/*
-		 * A previous I/O error may have been due to temporary
-		 * failures, eg. multipath errors.
-		 * PG_error will be set again if readpage fails.
-		 */
-		ClearPageError(page);
-		/* Start the actual read. The read will unlock the page. */
-		error = mapping->a_ops->readpage(filp, page);
-
-		if (unlikely(error)) {
-			if (error == AOP_TRUNCATED_PAGE) {
-				put_page(page);
-				error = 0;
-				goto find_page;
-			}
-			goto readpage_error;
-		}
-
-		if (!PageUptodate(page)) {
-			error = lock_page_killable(page);
-			if (unlikely(error))
-				goto readpage_error;
-			if (!PageUptodate(page)) {
-				if (page->mapping == NULL) {
-					/*
-					 * invalidate_mapping_pages got it
-					 */
-					unlock_page(page);
-					put_page(page);
-					goto find_page;
-				}
-				unlock_page(page);
-				ra->ra_pages /= 4;
-				error = -EIO;
-				goto readpage_error;
-			}
-			unlock_page(page);
-		}
-
-		goto page_ok;
-
-readpage_error:
-		/* UHHUH! A synchronous read error occurred. Report it */
-		put_page(page);
-		goto out;
-
-no_cached_page:
-		/*
-		 * Ok, it wasn't cached, so we need to create a new
-		 * page..
-		 */
-		page = page_cache_alloc(mapping);
-		if (!page) {
-			error = -ENOMEM;
-			goto out;
-		}
-		error = add_to_page_cache_lru(page, mapping, index,
-					      mapping_gfp_constraint(mapping, GFP_KERNEL));
-		if (error) {
-			put_page(page);
-			if (error == -EEXIST) {
-				error = 0;
-				goto find_page;
-			}
-			goto out;
-		}
-		goto readpage;
-	}
-
-	error = -EAGAIN;
-out:
-	ra->prev_pos = index_prev;
-	ra->prev_pos <<= PAGE_SHIFT;
-	ra->prev_pos |= prev_offset;
-
-	file_accessed(filp);
-	return error;
-}
-
 static struct page *
 assign_page(uvm_va_block_t *block, bool zero)
 {
@@ -414,12 +186,16 @@ assign_page(uvm_va_block_t *block, bool zero)
 static struct page *
 assign_pagecache(uvm_va_block_t *block, uvm_page_index_t page_index)
 {
-	uvm_va_range_t	*va_range = block->va_range;
-	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_range->node.uxu_rtn;
-	struct file	*uxu_file = uxu_rtn->filp;
-	pgoff_t	pgoff_block = (block->start - block->va_range->node.start) >> PAGE_SHIFT;
+	struct file	*uxu_file;
+	pgoff_t	pgoff_block;
+	struct page	*page;
 
-	return read_mapping_page(uxu_file->f_mapping, pgoff_block + page_index, NULL);
+	uxu_file = UXU_FILE_FROM_BLOCK(block);
+	pgoff_block = BLOCK_START_OFFSET(block) >> PAGE_SHIFT;
+	page = read_mapping_page(uxu_file->f_mapping, pgoff_block + page_index, NULL);
+	if (IS_ERR(page))
+		return NULL;
+	return page;
 }
 
 static inline bool
@@ -429,7 +205,7 @@ uxu_is_pagecachable(uvm_va_block_t *block, uvm_page_index_t page_id)
 	uvm_page_index_t	outer_max;
 	loff_t len_remain;
 
-	if (block->va_range->node.uxu_rtn.flags & UVM_UXU_FLAG_VOLATILE)
+	if (uxu_is_volatile_block(block))
 		return false;
 	inode = block->va_range->node.uxu_rtn.filp->f_mapping->host;
 	len_remain = i_size_read(inode) - (block->start - block->va_range->node.start);
@@ -467,35 +243,21 @@ uxu_get_page(uvm_va_block_t *block, uvm_page_index_t page_index, bool zero)
 static bool
 load_pagecaches_for_block(uvm_va_block_t *block, uvm_va_block_region_t region)
 {
-	struct file	*uxu_file;
-	struct inode	*inode;
-	loff_t	isize;
 	int	page_id;
-	loff_t	file_start_offset;
-
-	uxu_file = UXU_FILE_FROM_BLOCK(block);
-	inode = uxu_file->f_mapping->host;
-
-	// Calculate the file offset based on the block start address.
-	file_start_offset = BLOCK_START_OFFSET(block);
-
-	isize = i_size_read(inode);
 
 	// Fill in page-cache pages to va_block
 	for_each_va_block_page_in_region(page_id, region) {
-		loff_t	offset = file_start_offset + page_id * PAGE_SIZE;
+		struct page	*page;
+		int	ret;
 
-		if (unlikely(offset >= isize)) {
-			struct page	*page = block->cpu.pages[page_id];
-			if (page)
-				lock_page(page);
-			continue;
-		}
-		if (read_block_page(uxu_file, offset, block, page_id) != 0) {
-			printk(KERN_DEBUG "Cannot prepare page for read at file offset 0x%llx\n", offset);
+		page = assign_pagecache(block, page_id);
+		if (page == NULL) {
+			printk(KERN_DEBUG "failed to assign pagecache(block: %llx, page_id: %d\n", block->start, page_id);
 			return false;
 		}
-		UVM_ASSERT(block->cpu.pages[page_id]);
+		ret = add_pagecache_to_block(block, page_id, page);
+		if (ret != NV_OK)
+			put_page(page);
 	}
 
 	return true;
