@@ -9,8 +9,10 @@ unit_test_write(unsigned long size)
 
 	do_unmap_for_write();
 
+	drop_caches();
+
 	if (!check_tmpfile(size))
-		FAIL("unexpected kernel write behavior");
+		FAIL("unexpected written file");
 
 	cleanup();
 
@@ -28,6 +30,8 @@ unit_test_check_write(unsigned long size)
 		FAIL("invalid uxu buffer written by GPU");
 
 	do_unmap_for_write();
+
+	drop_caches();
 
 	if (!check_tmpfile(size))
 		FAIL("invalid written file");
@@ -56,6 +60,8 @@ unit_test_multiple_writes(unsigned long size)
 		FAIL("invalid uxu buffer written by GPU");
 
 	do_unmap_for_write();
+
+	drop_caches();
 
 	if (!check_tmpfile(size))
 		FAIL("unexpected kernel write behavior");
