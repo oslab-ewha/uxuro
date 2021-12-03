@@ -435,11 +435,11 @@ static NV_STATUS
 uxu_flush(uvm_va_range_t *va_range)
 {
 	NV_STATUS	status = NV_OK;
-	uvm_va_block_t	*va_block, *va_block_next;
+	uvm_va_block_t	*block, *block_next;
 
 	// Evict blocks one by one.
-	for_each_va_block_in_va_range_safe(va_range, va_block, va_block_next) {
-		if ((status = uxu_flush_block(va_block)) != NV_OK) {
+	for_each_va_block_in_va_range_safe(va_range, block, block_next) {
+		if ((status = uxu_flush_block(block)) != NV_OK) {
 			printk(KERN_DEBUG "Encountered a problem with uxu_flush_block\n");
 			break;
 		}
@@ -491,7 +491,6 @@ uxu_release_block(uvm_va_block_t *va_block)
 {
 	uvm_va_block_t	*old;
 	size_t	index;
-
 	uvm_va_range_t	*va_range = va_block->va_range;
 
 	UVM_ASSERT(va_block != NULL);
@@ -650,42 +649,6 @@ uxu_write_end(uvm_va_block_t *va_block, void *fsdata_array[])
 	return status;
 }
 
-NV_STATUS
-uxu_va_block_make_resident(uvm_va_block_t *va_block,
-			   uvm_va_block_retry_t *va_block_retry,
-			   uvm_va_block_context_t *va_block_context,
-			   uvm_processor_id_t dest_id,
-			   uvm_va_block_region_t region,
-			   const uvm_page_mask_t *page_mask,
-			   const uvm_page_mask_t *prefetch_page_mask,
-			   uvm_make_resident_cause_t cause)
-{
-	uxu_fsdata_array_t	*pfsdata_array;
-	NV_STATUS	status;
-
-	if (!uvm_is_uxu_block(va_block) || !uxu_is_write_block(va_block) ||
-	    (cause != UVM_MAKE_RESIDENT_CAUSE_EVICTION && (cause != UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE || !UVM_ID_IS_CPU(dest_id))))
-		return uvm_va_block_make_resident(va_block, va_block_retry, va_block_context, dest_id, region, page_mask, prefetch_page_mask, cause);
-
-	if (!va_block->is_dirty && uxu_is_volatile_block(va_block)) {
-		uxu_block_mark_recent_in_buffer(va_block);
-		return uvm_va_block_make_resident(va_block, va_block_retry, va_block_context, dest_id, region, page_mask, prefetch_page_mask, cause);
-	}
-
-	pfsdata_array = kmem_cache_alloc(g_uxu_fsdata_array_cache, NV_UVM_GFP_FLAGS);
-	if (pfsdata_array == NULL)
-		return NV_ERR_NO_MEMORY;
-
-	uxu_write_begin(va_block, *pfsdata_array);
-	status = uvm_va_block_make_resident(va_block, va_block_retry, va_block_context, dest_id, region, page_mask, prefetch_page_mask, cause);
-	if (status == NV_OK)
-		status = uvm_tracker_wait(&va_block->tracker);
-	uxu_write_end(va_block, *pfsdata_array);
-	kmem_cache_free(g_uxu_fsdata_array_cache, pfsdata_array);
-
-	return status;
-}
-
 /**
  * Write the data of this `va_block` to the file.
  * Callers have to make sure that there is no duplicated data on GPU.
@@ -773,19 +736,6 @@ uxu_flush_host_block(uvm_va_block_t *block)
 	set_fs(fs);
 
 	return status;
-}
-
-void
-uvm_uxu_set_page_dirty(struct page *page)
-{
-	/* Ugly, but we have no way to safely set dirty */
-	int *p = (int *)page_to_virt(page);
-	if (p) {
-		int x;
-		x = *p;
-		*p = (x + 1);
-		*p = x;
-	}
 }
 
 /**

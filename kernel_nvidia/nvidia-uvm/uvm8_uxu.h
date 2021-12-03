@@ -26,19 +26,7 @@ void uxu_try_load_block(uvm_va_block_t *block,
 
 struct page *uxu_get_page(uvm_va_block_t *block, uvm_page_index_t page_index, bool zero);
 
-void uvm_uxu_set_page_dirty(struct page *page);
-
 void stop_pagecache_reducer(uvm_va_space_t *va_space);
-
-NV_STATUS
-uxu_va_block_make_resident(uvm_va_block_t *va_block,
-			   uvm_va_block_retry_t *va_block_retry,
-			   uvm_va_block_context_t *va_block_context,
-			   uvm_processor_id_t dest_id,
-			   uvm_va_block_region_t region,
-			   const uvm_page_mask_t *page_mask,
-			   const uvm_page_mask_t *prefetch_page_mask,
-			   uvm_make_resident_cause_t cause);
 
 /**
  * Is this va_range managed by uxu driver?

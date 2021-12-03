@@ -39,7 +39,6 @@
 #include "uvm8_migrate.h"
 #include "uvm8_migrate_pageable.h"
 #include "nv_speculation_barrier.h"
-#include "uvm8_uxu.h"
 
 typedef enum
 {
@@ -218,7 +217,7 @@ NV_STATUS uvm_va_block_migrate_locked(uvm_va_block_t *va_block,
                                                            UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE);
     }
     else {
-        status = uxu_va_block_make_resident(va_block,
+        status = uvm_va_block_make_resident(va_block,
                                             va_block_retry,
                                             va_block_context,
                                             dest_id,

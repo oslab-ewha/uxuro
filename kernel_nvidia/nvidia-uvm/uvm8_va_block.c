@@ -2156,11 +2156,6 @@ static void block_update_page_dirty_state(uvm_va_block_t *block,
     if (UVM_ID_IS_GPU(dst_id))
         return;
 
-    if (uvm_page_mask_test(&block->cpu.pagecached, page_index)) {
-        uvm_uxu_set_page_dirty(block->cpu.pages[page_index]);
-        return;
-    }
-
     if (uvm_id_equal(src_id, block->va_range->preferred_location))
         ClearPageDirty(block->cpu.pages[page_index]);
     else
