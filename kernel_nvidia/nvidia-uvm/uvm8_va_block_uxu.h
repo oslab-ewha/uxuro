@@ -87,8 +87,8 @@ uxubk_copy_resident_pages_mask(uvm_va_block_t *block,
 
 	if (!uvm_is_uxu_block(block) ||
 	    (cause != UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && cause != UVM_MAKE_RESIDENT_CAUSE_UXU) ||
-	    (cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && UVM_ID_IS_CPU(dst_id) && uvm_uxu_need_to_evict_from_gpu(block)) ||
-	    (cause == UVM_MAKE_RESIDENT_CAUSE_UXU && UVM_ID_IS_GPU(dst_id))) {
+	    cause == UVM_MAKE_RESIDENT_CAUSE_UXU ||
+	    (cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && UVM_ID_IS_CPU(dst_id) && uxu_is_write_block(block))) {
 		return block_copy_resident_pages_mask(block,
 						      block_context,
 						      dst_id,

@@ -422,11 +422,9 @@ assign_pagecache(uvm_va_block_t *block, uvm_page_index_t page_index)
 	uvm_va_range_t	*va_range = block->va_range;
 	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_range->node.uxu_rtn;
 	struct file	*uxu_file = uxu_rtn->filp;
-	loff_t	file_start_offset = block->start - block->va_range->node.start;
-	loff_t	offset;
+	pgoff_t	pgoff_block = (block->start - block->va_range->node.start) >> PAGE_SHIFT;
 
-	offset = file_start_offset + page_index * PAGE_SIZE;
-	return read_mapping_page(uxu_file->f_mapping, offset, NULL);
+	return read_mapping_page(uxu_file->f_mapping, pgoff_block + page_index, NULL);
 }
 
 static inline bool
@@ -453,7 +451,7 @@ uxu_get_page(uvm_va_block_t *block, uvm_page_index_t page_index, bool zero)
 
 	if (uxu_is_pagecachable(block, page_index)) {
 		page = assign_pagecache(block, page_index);
-		if (page)
+		if (!IS_ERR(page))
 			uvm_page_mask_set(&block->cpu.pagecached, page_index);
 		else {
 			page = assign_page(block, zero);
@@ -924,8 +922,8 @@ uxu_va_block_make_resident(uvm_va_block_t *va_block,
 	uxu_fsdata_array_t	*pfsdata_array;
 	NV_STATUS	status;
 
-	if (!uvm_is_uxu_block(va_block) || uxu_is_write_block(va_block) ||
-	    (cause != UVM_MAKE_RESIDENT_CAUSE_EVICTION && (cause != UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE || UVM_ID_IS_CPU(dest_id))))
+	if (!uvm_is_uxu_block(va_block) || !uxu_is_write_block(va_block) ||
+	    (cause != UVM_MAKE_RESIDENT_CAUSE_EVICTION && (cause != UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE || !UVM_ID_IS_CPU(dest_id))))
 		return uvm_va_block_make_resident(va_block, va_block_retry, va_block_context, dest_id, region, page_mask, prefetch_page_mask, cause);
 
 	if (!va_block->is_dirty && uxu_is_volatile_block(va_block)) {
