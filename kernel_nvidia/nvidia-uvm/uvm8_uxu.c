@@ -35,17 +35,14 @@
 #include "uvm8_mem.h"
 #include "uvm8_uxu.h"
 
+#define UXU_FILE_FROM_BLOCK(block)	((block)->va_range->node.uxu_rtn.filp);
+#define BLOCK_START_OFFSET(block)	((block)->start - (block)->va_range->node.start);
+
 #define MIN(x, y) ((x) < (y) ? (x): (y))
 
 typedef void *uxu_fsdata_array_t[PAGES_PER_UVM_VA_BLOCK];
 
 static struct kmem_cache	*g_uxu_fsdata_array_cache __read_mostly;
-
-static void
-uvm_page_mask_fill(uvm_page_mask_t *mask)
-{
-	bitmap_fill(mask->bitmap, PAGES_PER_UVM_VA_BLOCK);
-}
 
 /**
  * Determine if we need to reclaim some blocks or not.
@@ -114,51 +111,51 @@ uxu_unmap_page(uvm_va_block_t *va_block, int page_index)
 }
 
 static NV_STATUS
-insert_pagecache_to_va_block(uvm_va_block_t *va_block, int page_id, struct page *page)
+add_pagecache_to_block(uvm_va_block_t *block, int page_id, struct page *page)
 {
 	NV_STATUS	status = NV_OK;
 	uvm_gpu_id_t	gpu_id;
 
 	lock_page(page);
 
-	if (va_block->cpu.pages[page_id] != page) {
-		if (va_block->cpu.pages[page_id] != NULL) {
-			uxu_unmap_page(va_block, page_id);
-			if (uvm_page_mask_test(&va_block->cpu.pagecached, page_id))
-				put_page(va_block->cpu.pages[page_id]);
+	if (block->cpu.pages[page_id] != page) {
+		if (block->cpu.pages[page_id] != NULL) {
+			uxu_unmap_page(block, page_id);
+			if (uvm_page_mask_test(&block->cpu.pagecached, page_id))
+				put_page(block->cpu.pages[page_id]);
 			else
-				__free_page(va_block->cpu.pages[page_id]);
+				__free_page(block->cpu.pages[page_id]);
 		}
 		for_each_gpu_id(gpu_id) {
 			uvm_gpu_t	*gpu;
-			uvm_va_block_gpu_state_t	*gpu_state = va_block->gpus[uvm_id_gpu_index(gpu_id)];
+			uvm_va_block_gpu_state_t	*gpu_state = block->gpus[uvm_id_gpu_index(gpu_id)];
 			if (!gpu_state)
 				continue;
 
 			UVM_ASSERT(gpu_state->cpu_pages_dma_addrs[page_id] == 0);
 
-			UVM_ASSERT(va_block->va_range);
-			UVM_ASSERT(va_block->va_range->va_space);
-			gpu = uvm_va_space_get_gpu(va_block->va_range->va_space, gpu_id);
+			UVM_ASSERT(block->va_range);
+			UVM_ASSERT(block->va_range->va_space);
+			gpu = uvm_va_space_get_gpu(block->va_range->va_space, gpu_id);
 
 			status = uvm_gpu_map_cpu_pages(gpu, page, PAGE_SIZE, &gpu_state->cpu_pages_dma_addrs[page_id]);
 			if (status != NV_OK) {
 				printk(KERN_DEBUG "Cannot do uvm_gpu_map_cpu_pages\n");
-				goto insert_pagecache_to_va_block_error;
+				goto error;
 			}
 		}
-		va_block->cpu.pages[page_id] = page;
+		block->cpu.pages[page_id] = page;
 	}
 	else {
 		put_page(page);
 	}
 
-	uvm_page_mask_set(&va_block->cpu.pagecached, page_id);
+	uvm_page_mask_set(&block->cpu.pagecached, page_id);
 
 	return NV_OK;
 
-insert_pagecache_to_va_block_error:
-	uxu_unmap_page(va_block, page_id);
+error:
+	uxu_unmap_page(block, page_id);
 	unlock_page(page);
 
 	return status;
@@ -168,22 +165,20 @@ insert_pagecache_to_va_block_error:
  * Inspired by generic_file_buffered_read in /mm/filemap.c.
  */
 static int
-prepare_page_for_read(struct file *filp, loff_t ppos, uvm_va_block_t *va_block, int page_id)
+read_block_page(struct file *filp, loff_t ppos, uvm_va_block_t *block, int page_id)
 {
 	struct address_space	*mapping = filp->f_mapping;
 	struct inode	*inode = mapping->host;
 	struct file_ra_state	*ra = &filp->f_ra;
-	pgoff_t	index;
-	pgoff_t	last_index;
-	pgoff_t	prev_index;
+	pgoff_t	index, index_last, index_prev;
 	unsigned long	offset;      /* offset into pagecache page */
 	unsigned int	prev_offset;
 	int	error = 0;
 
 	index = ppos >> PAGE_SHIFT;
-	prev_index = ra->prev_pos >> PAGE_SHIFT;
+	index_prev = ra->prev_pos >> PAGE_SHIFT;
 	prev_offset = ra->prev_pos & (PAGE_SIZE-1);
-	last_index = (ppos + PAGE_SIZE + PAGE_SIZE-1) >> PAGE_SHIFT;
+	index_last = (ppos + PAGE_SIZE + PAGE_SIZE-1) >> PAGE_SHIFT;
 	offset = ppos & ~PAGE_MASK;
 
 	for (;;) {
@@ -202,13 +197,13 @@ find_page:
 
 		page = find_get_page(mapping, index);
 		if (!page) {
-			page_cache_sync_readahead(mapping, ra, filp, index, last_index - index);
+			page_cache_sync_readahead(mapping, ra, filp, index, index_last - index);
 			page = find_get_page(mapping, index);
 			if (unlikely(page == NULL))
 				goto no_cached_page;
 		}
 		if (PageReadahead(page)) {
-			page_cache_async_readahead(mapping, ra, filp, page, index, last_index - index);
+			page_cache_async_readahead(mapping, ra, filp, page, index, index_last - index);
 		}
 		if (!PageUptodate(page)) {
 			/*
@@ -273,15 +268,15 @@ page_ok:
 		 * When a sequential read accesses a page several times,
 		 * only mark it as accessed the first time.
 		 */
-		if (prev_index != index || offset != prev_offset)
+		if (index_prev != index || offset != prev_offset)
 			mark_page_accessed(page);
-		prev_index = index;
+		index_prev = index;
 
 		/*
 		 * Ok, we have the page, and it's up-to-date, so
 		 * now we can insert it to the va_block...
 		 */
-		ret = insert_pagecache_to_va_block(va_block, page_id, page);
+		ret = add_pagecache_to_block(block, page_id, page);
 		if (ret != NV_OK) {
 			error = ret;
 			goto out;
@@ -386,7 +381,7 @@ no_cached_page:
 
 	error = -EAGAIN;
 out:
-	ra->prev_pos = prev_index;
+	ra->prev_pos = index_prev;
 	ra->prev_pos <<= PAGE_SHIFT;
 	ra->prev_pos |= prev_offset;
 
@@ -470,138 +465,122 @@ uxu_get_page(uvm_va_block_t *block, uvm_page_index_t page_index, bool zero)
 }
 
 static bool
-fill_pagecaches_for_read(struct file *uxu_file, uvm_va_block_t *va_block, uvm_va_block_region_t region)
+load_pagecaches_for_block(uvm_va_block_t *block, uvm_va_block_region_t region)
 {
-	struct inode	*inode = uxu_file->f_mapping->host;
+	struct file	*uxu_file;
+	struct inode	*inode;
 	loff_t	isize;
-	uvm_page_mask_t read_mask;
-	int page_id;
-	// Calculate the file offset based on the block start address.
-	loff_t	file_start_offset = va_block->start - va_block->va_range->node.start;
+	int	page_id;
+	loff_t	file_start_offset;
 
-	uvm_page_mask_fill(&read_mask);
+	uxu_file = UXU_FILE_FROM_BLOCK(block);
+	inode = uxu_file->f_mapping->host;
+
+	// Calculate the file offset based on the block start address.
+	file_start_offset = BLOCK_START_OFFSET(block);
 
 	isize = i_size_read(inode);
 
 	// Fill in page-cache pages to va_block
-	for_each_va_block_page_in_region_mask(page_id, &read_mask, region) {
+	for_each_va_block_page_in_region(page_id, region) {
 		loff_t	offset = file_start_offset + page_id * PAGE_SIZE;
 
 		if (unlikely(offset >= isize)) {
-			struct page	*page = va_block->cpu.pages[page_id];
+			struct page	*page = block->cpu.pages[page_id];
 			if (page)
 				lock_page(page);
 			continue;
 		}
-		if (prepare_page_for_read(uxu_file, offset, va_block, page_id) != 0) {
+		if (read_block_page(uxu_file, offset, block, page_id) != 0) {
 			printk(KERN_DEBUG "Cannot prepare page for read at file offset 0x%llx\n", offset);
 			return false;
 		}
-		UVM_ASSERT(va_block->cpu.pages[page_id]);
+		UVM_ASSERT(block->cpu.pages[page_id]);
 	}
 
 	return true;
 }
 
-static uvm_page_index_t
-get_region_readable_outer(uvm_va_block_t *va_block, struct file *uxu_file)
+static void
+setup_block_readable_region(uvm_va_block_t *block, uvm_va_block_region_t *pregion)
 {
-	uvm_page_index_t	outer = ((va_block->end - va_block->start) >> PAGE_SHIFT) + 1;
-	uvm_page_index_t	outer_max;
-	struct inode	*inode = uxu_file->f_mapping->host;
-	loff_t	len_remain = i_size_read(inode) - (va_block->start - va_block->va_range->node.start);
+	struct file	*uxu_file;
+	struct inode	*inode;
+	uvm_page_index_t	outer, outer_readable;
+	loff_t	len_remain;
 
-	outer_max = (len_remain + PAGE_SIZE - 1) >> PAGE_SHIFT;
-	if (outer > outer_max)
-		return outer_max;
-	return outer;
+	uxu_file = UXU_FILE_FROM_BLOCK(block);
+	inode = uxu_file->f_mapping->host;
+	len_remain = i_size_read(inode) - (block->start - block->va_range->node.start);
+
+	outer = ((block->end - block->start) >> PAGE_SHIFT) + 1;
+	outer_readable = (len_remain + PAGE_SIZE - 1) >> PAGE_SHIFT;
+	if (outer > outer_readable)
+		pregion->outer = outer_readable;
+	else
+		pregion->outer = outer;
+	pregion->first = 0;
 }
 
 /**
- * Prepare page-cache pages to be read.
- *
- * @param va_block: data will be put in this va_block.
- *
+ * @param block: data will be put in this va_block.
  * @param block_retry: need this to allocate memory pages and register them to
  * this UVM range.
- *
  * @param service_context: need it the same as block_retry.
- *
  * @return: NV_OK on success. NV_ERR_* otherwise.
  */
 static NV_STATUS
-uxu_read_begin(uvm_va_block_t *va_block, uvm_va_block_retry_t *block_retry, uvm_service_block_context_t *service_context)
+uxu_read_begin(uvm_va_block_t *block, uvm_va_block_retry_t *block_retry, uvm_service_block_context_t *service_context)
 {
-	NV_STATUS	status = NV_OK;
-
-	uvm_va_range_t	*va_range = va_block->va_range;
-
-	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_range->node.uxu_rtn;
-
-	struct file	*uxu_file = uxu_rtn->filp;
+	uvm_va_block_region_t	region;
+	uvm_page_mask_t	page_mask, page_mask_saved;
+	NV_STATUS	status;
 
 	// Specify that the entire block is the region of concern.
-	uvm_va_block_region_t region = uvm_va_block_region(0, get_region_readable_outer(va_block, uxu_file));
+	setup_block_readable_region(block, &region);
 
-	uvm_page_mask_t	my_mask;
-	// Record the original page mask and set the mask to all 1s.
-	uvm_page_mask_t	original_page_mask;
-
-	uvm_page_mask_copy(&original_page_mask, &service_context->block_context.make_resident.page_mask);
+	uvm_page_mask_copy(&page_mask_saved, &service_context->block_context.make_resident.page_mask);
 
 	uvm_page_mask_init_from_region(&service_context->block_context.make_resident.page_mask, region, NULL);
-	uvm_page_mask_copy(&my_mask, &service_context->block_context.make_resident.page_mask);
-
-	UVM_ASSERT(uxu_file != NULL);
+	uvm_page_mask_copy(&page_mask, &service_context->block_context.make_resident.page_mask);
 
 	// Change this va_block's state: all pages are the residents of CPU.
-	status = uvm_va_block_make_resident(va_block,
-					    block_retry,
-					    &service_context->block_context,
-					    UVM_ID_CPU,
-					    region,
-					    &my_mask,
-					    NULL,
-					    UVM_MAKE_RESIDENT_CAUSE_UXU);
+	status = uvm_va_block_make_resident(block, block_retry, &service_context->block_context,
+					    UVM_ID_CPU, region, &page_mask, NULL, UVM_MAKE_RESIDENT_CAUSE_UXU);
 
 	if (status != NV_OK) {
 		printk(KERN_DEBUG "Cannot make temporary resident on CPU\n");
-		goto read_begin_err_0;
+		goto error;
 	}
 
-	status = uvm_tracker_wait(&va_block->tracker);
+	status = uvm_tracker_wait(&block->tracker);
 	if (status != NV_OK) {
 		printk(KERN_DEBUG "Cannot make temporary resident on CPU\n");
-		goto read_begin_err_0;
+		goto error;
 	}
 
-	if (fill_pagecaches_for_read(uxu_file, va_block, region))
-		va_block->has_data = true;
+	if (load_pagecaches_for_block(block, region))
+		block->is_loaded = true;
 	else
 		status = NV_ERR_OPERATING_SYSTEM;
 
-read_begin_err_0:
+error:
 	// Put back the original mask.
-	uvm_page_mask_copy(&service_context->block_context.make_resident.page_mask, &original_page_mask);
+	uvm_page_mask_copy(&service_context->block_context.make_resident.page_mask, &page_mask_saved);
 
 	return status;
 }
 
 static NV_STATUS
-uxu_read_end(uvm_va_block_t *va_block)
+uxu_read_end(uvm_va_block_t *block)
 {
+	uvm_va_block_region_t	region;
 	int	page_id;
-	struct page	*page;
 
-	uvm_page_mask_t	read_mask;
+	setup_block_readable_region(block, &region);
 
-	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_block->va_range->node.uxu_rtn;
-	struct file	*uxu_file = uxu_rtn->filp;
-	uvm_va_block_region_t	region = uvm_va_block_region(0, get_region_readable_outer(va_block, uxu_file));
-
-	uvm_page_mask_fill(&read_mask);
-	for_each_va_block_page_in_region_mask(page_id, &read_mask, region) {
-		page = va_block->cpu.pages[page_id];
+	for_each_va_block_page_in_region(page_id, region) {
+		struct page	*page = block->cpu.pages[page_id];
 		if (page)
 			unlock_page(page);
 	}
@@ -615,7 +594,7 @@ uxu_try_load_block(uvm_va_block_t *block, uvm_va_block_retry_t *block_retry, uvm
 	uvm_uxu_range_tree_node_t	*uxu_rtn = &block->va_range->node.uxu_rtn;
 	NV_STATUS	status;
 
-	if (block->has_data)
+	if (block->is_loaded)
 		return;
 	if (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE)
 		return;
@@ -959,58 +938,49 @@ uxu_va_block_make_resident(uvm_va_block_t *va_block,
  * @return: NV_OK on success. NV_ERR_* otherwise.
  */
 static NV_STATUS
-uxu_flush_host_block(uvm_va_space_t *va_space, uvm_va_range_t *va_range, uvm_va_block_t *va_block, bool is_evict, const uvm_page_mask_t *page_mask)
+uxu_flush_host_block(uvm_va_block_t *block)
 {
+	struct file	*uxu_file;
+	mm_segment_t	fs;
+	int	page_id, page_id_prev;
+	// Compute the file start offset based on `va_block`.
+	loff_t	file_start_offset;
+	loff_t	offset;
+	struct iovec	*iov = block->va_range->node.uxu_rtn.iov;
+	unsigned int	iov_index = 0;
+	uvm_va_block_region_t	region;
 	NV_STATUS	status = NV_OK;
 
-	struct file	*uxu_file = va_range->node.uxu_rtn.filp;
-	mm_segment_t	fs;
-
-	int	page_id, prev_page_id;
-
-	// Compute the file start offset based on `va_block`.
-	loff_t	file_start_offset = va_block->start - va_range->node.start;
-	loff_t	offset;
-
-	struct kiocb	kiocb;
-	struct iovec	*iov = va_range->node.uxu_rtn.iov;
-	struct iov_iter	iter;
-	unsigned int	iov_index = 0;
-	ssize_t	_ret;
-
-	void	*page_addr;
-
-	uvm_va_block_region_t	region = uvm_va_block_region(0, (va_block->end - va_block->start + 1) / PAGE_SIZE);
-
-	uvm_page_mask_t	mask;
-
-	UVM_ASSERT(uxu_file != NULL);
-
-	if (!page_mask)
-		uvm_page_mask_fill(&mask);
-	else
-		uvm_page_mask_copy(&mask, page_mask);
+	file_start_offset = BLOCK_START_OFFSET(block);
+	uxu_file = UXU_FILE_FROM_BLOCK(block);
+	setup_block_readable_region(block, &region);
 
 	// Switch the filesystem space to kernel space.
 	fs = get_fs();
 	set_fs(KERNEL_DS);
 
 	// Build iov based on the page addresses.
-	prev_page_id = -2;
+	page_id_prev = -2;
 	offset = file_start_offset;
-	for_each_va_block_page_in_region_mask(page_id, &mask, region) {
-		if (!va_block->cpu.pages[page_id])
+	for_each_va_block_page_in_region(page_id, region) {
+		struct iov_iter	iter;
+		struct kiocb	kiocb;
+		void	*page_addr;
+
+		if (!block->cpu.pages[page_id])
 			continue;
 
-		page_addr = page_address(va_block->cpu.pages[page_id]);
+		page_addr = page_address(block->cpu.pages[page_id]);
 
 		// Perform asynchronous write.
-		if (page_id - 1 != prev_page_id && iov_index > 0) {
+		if (page_id - 1 != page_id_prev && iov_index > 0) {
+			ssize_t	ret;
+
 			init_sync_kiocb(&kiocb, uxu_file);
 			kiocb.ki_pos = offset;
 			iov_iter_init(&iter, WRITE, iov, iov_index, iov_index * PAGE_SIZE);
-			_ret = call_write_iter(uxu_file, &kiocb, &iter);
-			BUG_ON(_ret == -EIOCBQUEUED);
+			ret = call_write_iter(uxu_file, &kiocb, &iter);
+			BUG_ON(ret == -EIOCBQUEUED);
 
 			iov_index = 0;
 			offset = file_start_offset + page_id * PAGE_SIZE;
@@ -1018,20 +988,24 @@ uxu_flush_host_block(uvm_va_space_t *va_space, uvm_va_range_t *va_range, uvm_va_
 		iov[iov_index].iov_base = page_addr;
 		iov[iov_index].iov_len = PAGE_SIZE;
 		++iov_index;
-		prev_page_id = page_id;
+		page_id_prev = page_id;
 	}
 
 	// Start asynchronous write.
 	if (iov_index > 0) {
+		struct iov_iter	iter;
+		struct kiocb	kiocb;
+		ssize_t	ret;
+
 		init_sync_kiocb(&kiocb, uxu_file);
 		kiocb.ki_pos = offset;
 		iov_iter_init(&iter, WRITE, iov, iov_index, iov_index * PAGE_SIZE);
-		_ret = call_write_iter(uxu_file, &kiocb, &iter);
-		BUG_ON(_ret == -EIOCBQUEUED);
+		ret = call_write_iter(uxu_file, &kiocb, &iter);
+		BUG_ON(ret == -EIOCBQUEUED);
 	}
 
 	// Mark that this block has dirty data on the file.
-	va_block->is_dirty = true;
+	block->is_dirty = true;
 
 	// Switch back to the original space.
 	set_fs(fs);
@@ -1072,7 +1046,7 @@ uxu_reduce_memory_consumption(uvm_va_space_t *va_space)
 
 	unsigned long	counter = 0;
 
-	uvm_va_block_t	*va_block;
+	uvm_va_block_t	*block;
 	struct list_head *lp, *next;
 
 	uvm_va_space_down_write(va_space);
@@ -1081,16 +1055,16 @@ uxu_reduce_memory_consumption(uvm_va_space_t *va_space)
 	list_for_each_safe(lp, next, &uxu_va_space->lru_head) {
 		if (counter >= uxu_va_space->trash_nr_blocks)
 			break;
-		va_block = list_entry(lp, uvm_va_block_t, uxu_lru);
+		block = list_entry(lp, uvm_va_block_t, uxu_lru);
 
 		// Terminate the loop since we cannot trash out blocks that have a copy on GPU
-		if (uvm_processor_mask_get_gpu_count(&(va_block->resident)) > 0) {
+		if (uvm_processor_mask_get_gpu_count(&(block->resident)) > 0) {
 			//printk(KERN_DEBUG "Encounter a block whose data are in GPU!!!\n");
 			continue;
 		}
 		// Evict the block if it is on CPU only and this `va_range` has the write flag.
-		if (uvm_processor_mask_get_count(&(va_block->resident)) > 0 && va_block->va_range->node.uxu_rtn.flags & UVM_UXU_FLAG_WRITE) {
-			status = uxu_flush_host_block(va_block->va_range->va_space, va_block->va_range, va_block, true, NULL);
+		if (uvm_processor_mask_get_count(&(block->resident)) > 0 && block->va_range->node.uxu_rtn.flags & UVM_UXU_FLAG_WRITE) {
+			status = uxu_flush_host_block(block);
 			if (status != NV_OK) {
 				printk(KERN_DEBUG "Cannot evict block\n");
 				continue;
@@ -1099,10 +1073,10 @@ uxu_reduce_memory_consumption(uvm_va_space_t *va_space)
 
 		uvm_mutex_lock(&uxu_va_space->lock_blocks);
 		// Remove this block from the list and release it.
-		list_del_init(&va_block->uxu_lru);
+		list_del_init(&block->uxu_lru);
 		uvm_mutex_unlock(&uxu_va_space->lock_blocks);
 
-		uxu_release_block(va_block);
+		uxu_release_block(block);
 		++counter;
 	}
 
@@ -1243,7 +1217,7 @@ static NV_STATUS
 uxu_remap(uvm_va_space_t *va_space, UVM_UXU_REMAP_PARAMS *params)
 {
 	uvm_uxu_range_tree_node_t	*uxu_rtn;
-	uvm_va_block_t	*va_block, *va_block_next;
+	uvm_va_block_t	*block, *block_next;
 	uvm_uxu_va_space_t	*uxu_va_space = &va_space->uxu_va_space;
 
 	uvm_va_range_t	*va_range = uvm_va_range_find(va_space, (NvU64)params->uvm_addr);
@@ -1268,11 +1242,11 @@ uxu_remap(uvm_va_space_t *va_space, UVM_UXU_REMAP_PARAMS *params)
 		uvm_mutex_lock(&uxu_va_space->lock);
 
 	// Volatile data is simply discarded even though it has been remapped with non-volatile
-	for_each_va_block_in_va_range_safe(va_range, va_block, va_block_next) {
-		va_block->is_dirty = false;
+	for_each_va_block_in_va_range_safe(va_range, block, block_next) {
+		block->is_dirty = false;
 		if (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE) {
-			uxu_release_block(va_block);
-			list_del(&va_block->uxu_lru);
+			uxu_release_block(block);
+			list_del(&block->uxu_lru);
 		}
 	}
 
