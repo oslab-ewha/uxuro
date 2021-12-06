@@ -35,7 +35,8 @@
 #include "uvm8_mem.h"
 #include "uvm8_uxu.h"
 
-#define UXU_FILE_FROM_BLOCK(block)	((block)->va_range->node.uxu_rtn.filp);
+#define UXU_FILE_FROM_RANGE(range)	((range)->node.uxu_rtn.filp)
+#define UXU_FILE_FROM_BLOCK(block)	UXU_FILE_FROM_RANGE((block)->va_range)
 #define BLOCK_START_OFFSET(block)	((block)->start - (block)->va_range->node.start)
 
 #define MIN(x, y) ((x) < (y) ? (x): (y))
@@ -353,14 +354,13 @@ uxu_read_end(uvm_va_block_t *block)
 void
 uxu_try_load_block(uvm_va_block_t *block, uvm_va_block_retry_t *block_retry, uvm_service_block_context_t *service_context, uvm_processor_id_t processor_id)
 {
-	uvm_uxu_range_tree_node_t	*uxu_rtn = &block->va_range->node.uxu_rtn;
 	NV_STATUS	status;
 
 	if (block->is_loaded)
 		return;
-	if (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE)
+	if (uxu_is_volatile_block(block))
 		return;
-	if (!(uxu_rtn->flags & UVM_UXU_FLAG_READ) && !UVM_ID_IS_CPU(processor_id))
+	if (!uxu_is_read_block(block) && !UVM_ID_IS_CPU(processor_id))
 		return;
 
 	status = uxu_read_begin(block, block_retry, service_context);
@@ -381,29 +381,26 @@ uxu_try_load_block(uvm_va_block_t *block, uvm_va_block_retry_t *block_retry, uvm
  * @return: NV_OK on success. NV_ERR_* otherwise.
  */
 static NV_STATUS
-uxu_flush_block(uvm_va_block_t *va_block)
+uxu_flush_block(uvm_va_block_t *block)
 {
-	NV_STATUS	status = NV_OK;
-	uvm_va_range_t	*va_range = va_block->va_range;
-	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_range->node.uxu_rtn;
-
-	if (!(uxu_rtn->flags & UVM_UXU_FLAG_WRITE))
+	if (!uxu_is_write_block(block))
 		return NV_OK;
 
 	// Move data from GPU to CPU
-	if (uvm_processor_mask_get_gpu_count(&(va_block->resident)) > 0) {
-		uvm_va_block_region_t region = uvm_va_block_region_from_block(va_block);
-		uvm_va_block_context_t *block_context = uvm_va_block_context_alloc();
+	if (uvm_processor_mask_get_gpu_count(&block->resident) > 0) {
+		uvm_va_block_region_t	region = uvm_va_block_region_from_block(block);
+		uvm_va_block_context_t	*block_context = uvm_va_block_context_alloc();
+		NV_STATUS	status;
 
 		if (!block_context) {
 			printk(KERN_DEBUG "NV_ERR_NO_MEMORY\n");
 			return NV_ERR_NO_MEMORY;
 		}
 
-		uvm_mutex_lock(&va_block->lock);
+		uvm_mutex_lock(&block->lock);
 		// Move data resided on the GPU to host.
-		status = uvm_va_block_migrate_locked(va_block, NULL, block_context, region, UVM_ID_CPU, UVM_MIGRATE_MODE_MAKE_RESIDENT, NULL);
-		uvm_mutex_unlock(&va_block->lock);
+		status = uvm_va_block_migrate_locked(block, NULL, block_context, region, UVM_ID_CPU, UVM_MIGRATE_MODE_MAKE_RESIDENT, NULL);
+		uvm_mutex_unlock(&block->lock);
 
 		uvm_va_block_context_free(block_context);
 
@@ -413,7 +410,7 @@ uxu_flush_block(uvm_va_block_t *va_block)
 		}
 
 		// Wait for the d2h transfer to complete.
-		status = uvm_tracker_wait(&va_block->tracker);
+		status = uvm_tracker_wait(&block->tracker);
 
 		if (status != NV_OK) {
 			printk(KERN_DEBUG "NOT NV_OK\n");
@@ -421,7 +418,7 @@ uxu_flush_block(uvm_va_block_t *va_block)
 		}
 	}
 
-	return status;
+	return NV_OK;
 }
 
 /**
@@ -457,22 +454,18 @@ uxu_flush(uvm_va_range_t *va_range)
  * @return: always NV_OK.
  */
 NV_STATUS
-uvm_uxu_unregister_va_range(uvm_va_range_t *va_range)
+uvm_uxu_unregister_va_range(uvm_va_range_t *range)
 {
-	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_range->node.uxu_rtn;
-	struct file	*filp = uxu_rtn->filp;
+	struct file	*filp = UXU_FILE_FROM_RANGE(range);
+	struct iovec	*iov = range->node.uxu_rtn.iov;
 
-	UVM_ASSERT(filp != NULL);
-
-	if ((va_range->node.uxu_rtn.flags & UVM_UXU_FLAG_WRITE) && !(va_range->node.uxu_rtn.flags & UVM_UXU_FLAG_VOLATILE)) {
-		uxu_flush(va_range);
-        }
-
-	if (uxu_rtn->iov)
-		kfree(uxu_rtn->iov);
-
-	if ((uxu_rtn->flags & UVM_UXU_FLAG_WRITE) && !(uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE))
+	if (uxu_is_write_range(range) && !uxu_is_volatile_range(range)) {
+		uxu_flush(range);
 		vfs_fsync(filp, 1);
+	}
+
+	if (iov)
+		kfree(iov);
 
 	fput(filp);
 
@@ -746,39 +739,38 @@ uxu_flush_host_block(uvm_va_block_t *block)
  *
  * @return: NV_OK on success, NV_ERR_* otherwise.
  */
-static NV_STATUS
+static void
 uxu_reduce_memory_consumption(uvm_va_space_t *va_space)
 {
 	/*
 	 * TODO: locking assertion failed. write lock is required.
 	 */
-	NV_STATUS	status = NV_OK;
-
 	uvm_uxu_va_space_t	*uxu_va_space = &va_space->uxu_va_space;
-
+	struct list_head	*lp, *next;
 	unsigned long	counter = 0;
 
-	uvm_va_block_t	*block;
-	struct list_head *lp, *next;
-
 	uvm_va_space_down_write(va_space);
+
 	// Reclaim blocks based on least recent transfer.
 
 	list_for_each_safe(lp, next, &uxu_va_space->lru_head) {
+		uvm_va_block_t	*block;
+
 		if (counter >= uxu_va_space->trash_nr_blocks)
 			break;
 		block = list_entry(lp, uvm_va_block_t, uxu_lru);
 
 		// Terminate the loop since we cannot trash out blocks that have a copy on GPU
-		if (uvm_processor_mask_get_gpu_count(&(block->resident)) > 0) {
-			//printk(KERN_DEBUG "Encounter a block whose data are in GPU!!!\n");
+		if (uvm_processor_mask_get_gpu_count(&block->resident) > 0) {
+			// Encounter a block whose data are in GPU
 			continue;
 		}
 		// Evict the block if it is on CPU only and this `va_range` has the write flag.
-		if (uvm_processor_mask_get_count(&(block->resident)) > 0 && block->va_range->node.uxu_rtn.flags & UVM_UXU_FLAG_WRITE) {
-			status = uxu_flush_host_block(block);
-			if (status != NV_OK) {
-				printk(KERN_DEBUG "Cannot evict block\n");
+		if (uvm_processor_mask_get_count(&(block->resident)) > 0 && uxu_is_write_block(block)) {
+			NV_STATUS	status;
+
+			if ((status = uxu_flush_host_block(block)) != NV_OK) {
+				printk(KERN_DEBUG "Cannot evict block: err: %d\n", status);
 				continue;
 			}
 		}
@@ -789,12 +781,10 @@ uxu_reduce_memory_consumption(uvm_va_space_t *va_space)
 		uvm_mutex_unlock(&uxu_va_space->lock_blocks);
 
 		uxu_release_block(block);
-		++counter;
+		counter++;
 	}
 
 	uvm_va_space_up_write(va_space);
-
-	return status;
 }
 
 static int
@@ -874,11 +864,9 @@ static NV_STATUS
 uxu_map(uvm_va_space_t *va_space, UVM_UXU_MAP_PARAMS *params)
 {
 	uvm_uxu_range_tree_node_t	*uxu_rtn;
-
 	uvm_range_tree_node_t	*node = uvm_range_tree_find(&va_space->va_range_tree, (NvU64)params->uvm_addr);
 	NvU64	expected_start_addr = (NvU64)params->uvm_addr;
 	NvU64	expected_end_addr = expected_start_addr + params->size - 1;
-
 	size_t	max_nr_blocks;
 
 	// Make sure that uxu_initialize is called before this function.
@@ -928,11 +916,9 @@ uxu_map(uvm_va_space_t *va_space, UVM_UXU_MAP_PARAMS *params)
 static NV_STATUS
 uxu_remap(uvm_va_space_t *va_space, UVM_UXU_REMAP_PARAMS *params)
 {
-	uvm_uxu_range_tree_node_t	*uxu_rtn;
-	uvm_va_block_t	*block, *block_next;
 	uvm_uxu_va_space_t	*uxu_va_space = &va_space->uxu_va_space;
-
 	uvm_va_range_t	*va_range = uvm_va_range_find(va_space, (NvU64)params->uvm_addr);
+	uvm_va_block_t	*block, *block_next;
 	NvU64	expected_start_addr = (NvU64)params->uvm_addr;
 
 	// Make sure that uxu_initialize is called before this function.
@@ -948,24 +934,24 @@ uxu_remap(uvm_va_space_t *va_space, UVM_UXU_REMAP_PARAMS *params)
 		return NV_ERR_OPERATING_SYSTEM;
 	}
 
-	uxu_rtn = &va_range->node.uxu_rtn;
-
-	if (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE)
+	if (uxu_is_write_block(block)) {
 		uvm_mutex_lock(&uxu_va_space->lock);
 
-	// Volatile data is simply discarded even though it has been remapped with non-volatile
-	for_each_va_block_in_va_range_safe(va_range, block, block_next) {
-		block->is_dirty = false;
-		if (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE) {
+		// Volatile data is simply discarded even though it has been remapped with non-volatile
+		for_each_va_block_in_va_range_safe(va_range, block, block_next) {
+			block->is_dirty = false;
 			uxu_release_block(block);
 			list_del(&block->uxu_lru);
 		}
+
+		uvm_mutex_unlock(&uxu_va_space->lock);
+	}
+	else {
+		for_each_va_block_in_va_range_safe(va_range, block, block_next)
+			block->is_dirty = false;
 	}
 
-	if (uxu_rtn->flags & UVM_UXU_FLAG_VOLATILE)
-		uvm_mutex_unlock(&uxu_va_space->lock);
-
-	uxu_rtn->flags = params->flags;
+	va_range->node.uxu_rtn.flags = params->flags;
 
 	return NV_OK;
 }
