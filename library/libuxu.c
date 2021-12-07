@@ -20,42 +20,33 @@
 
 #define PSF_DIR		"/proc/self/fd"
 #define NVIDIA_UVM_PATH	"/dev/nvidia-uvm"
+
 #define UXU_IOCTL_INIT				1000
 #define UXU_IOCTL_MAP				1001
-#define UXU_IOCTL_TRASH_NRBLOCKS		1002
-#define UXU_IOCTL_TRASH_RESERVED_NRPAGES	1003
 #define UXU_IOCTL_REMAP				1004
 
-#define MIN_SIZE			((size_t)1 << 21)
-#define DEFAULT_TRASH_NR_BLOCKS		32
-#define DEFAULT_TRASH_NR_RESERVED_PAGES	(((unsigned long)1 << 21) * 4)
+/* Default # of pages when starting to reduce host pages of blocks */
+#define DEFAULT_NR_RESERVED_PAGES		((((unsigned long)1 << 21) / 4096) * 32 * 4)
+/* Default # of blocks which to be swapped out to a storage */
+#define DEFAULT_SWAPOUT_NR_BLOCKS		32
 
-#define UXU_ENVNAME_ENABLE_READ_CACHE	"UXU_ENABLE_READ_CACHE"
-#define UXU_ENVNAME_ENABLE_LAZY_WRITE	"UXU_ENABLE_LAZY_WRITE"
-#define UXU_ENVNAME_ENABLE_AIO_READ	"UXU_ENABLE_AIO_READ"
-#define UXU_ENVNAME_ENABLE_AIO_WRITE	"UXU_ENABLE_AIO_WRITE"
 #define UXU_ENVNAME_READAHEAD_TYPE	"UXU_READAHEAD_TYPE"
 #define UXU_ENVNAME_NR_RESERVED_PAGES	"UXU_NR_RESERVED_PAGES"
-
-#define UXU_INIT_FLAG_ENABLE_READ_CACHE	0x01
-#define UXU_INIT_FLAG_ENABLE_LAZY_WRITE	0x02
-#define UXU_INIT_FLAG_ENABLE_AIO_READ	0x04
-#define UXU_INIT_FLAG_ENABLE_AIO_WRITE	0x08
 
 static int	fadvice = -1;
 static int	fd_uvm = -1;
 static int	initialized;
 
-static int	minsize = MIN_SIZE;
 static int	disabled_uxu = 0;
 
 static GHashTable	*addr_map;
 
 typedef struct {
-	unsigned long trash_nr_blocks;
-	unsigned long trash_reserved_nr_pages;
-	unsigned short flags;
-	unsigned int status;
+	unsigned long	swapout_nr_blocks;
+	unsigned long	reserved_nr_pages;
+	/* currently, not used */
+	unsigned short	flags;
+	unsigned int	status;
 } uxu_ioctl_init_t;
 
 typedef struct {
@@ -160,13 +151,8 @@ init_module(void)
 		return UXU_ERR_UVM;
 	}
 
-	env_val = secure_getenv("UXU_MINSIZE");
-	if (env_val) {
-		sscanf(env_val, "%u", &minsize);
-	}
-
-	request.trash_nr_blocks = DEFAULT_TRASH_NR_BLOCKS;
-	request.trash_reserved_nr_pages = DEFAULT_TRASH_NR_RESERVED_PAGES;
+	request.trash_nr_blocks = DEFAULT_SWAPOUT_NR_BLOCKS;
+	request.trash_reserved_nr_pages = DEFAULT_NR_RESERVED_PAGES;
 	request.flags = 0;
 
 	env_val = secure_getenv(UXU_ENVNAME_NR_RESERVED_PAGES);
@@ -174,21 +160,6 @@ init_module(void)
 		if (*env_val != '\0' && *endptr == '\0')
 			request.trash_reserved_nr_pages = (unsigned long)nr_pages;
 	}
-	env_val = secure_getenv(UXU_ENVNAME_ENABLE_READ_CACHE);
-	if (!(env_val && strncasecmp(env_val, "no", 2) == 0))
-		request.flags |= UXU_INIT_FLAG_ENABLE_READ_CACHE;
-
-	env_val = secure_getenv(UXU_ENVNAME_ENABLE_LAZY_WRITE);
-	if (!(env_val && strncasecmp(env_val, "no", 2) == 0))
-		request.flags |= UXU_INIT_FLAG_ENABLE_LAZY_WRITE;
-
-	env_val = secure_getenv(UXU_ENVNAME_ENABLE_AIO_READ);
-	if (!(env_val && strncasecmp(env_val, "no", 2) == 0))
-        request.flags |= UXU_INIT_FLAG_ENABLE_AIO_READ;
-
-	env_val = secure_getenv(UXU_ENVNAME_ENABLE_AIO_WRITE);
-	if (!(env_val && strncasecmp(env_val, "no", 2) == 0))
-		request.flags |= UXU_INIT_FLAG_ENABLE_AIO_WRITE;
 
 	env_val = secure_getenv(UXU_ENVNAME_READAHEAD_TYPE);
 	if (env_val && strncasecmp(env_val, "agg", 3) == 0) {

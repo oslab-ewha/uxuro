@@ -1060,8 +1060,8 @@ typedef struct
 
 typedef struct
 {
-    unsigned long    trash_nr_blocks;           // IN
-    unsigned long    trash_reserved_nr_pages;   // IN
+    unsigned long    swapout_nr_blocks;         // IN
+    unsigned long    reserved_nr_pages;         // IN
     unsigned short   flags;                     // IN
     NV_STATUS        rmStatus;                  // OUT
 } UVM_UXU_INITIALIZE_PARAMS;

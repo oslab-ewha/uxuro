@@ -57,7 +57,7 @@ uxu_has_to_reclaim_blocks(uvm_uxu_va_space_t *uxu_va_space)
 {
 	unsigned long	freeram = global_zone_page_state(NR_FREE_PAGES);
 	unsigned long	pagecacheram = global_zone_page_state(NR_FILE_PAGES);
-	return freeram + pagecacheram < uxu_va_space->trash_reserved_nr_pages;
+	return freeram + pagecacheram < uxu_va_space->reserved_nr_pages;
 }
 
 /**
@@ -747,26 +747,27 @@ uxu_reduce_memory_consumption(uvm_va_space_t *va_space)
 	 */
 	uvm_uxu_va_space_t	*uxu_va_space = &va_space->uxu_va_space;
 	struct list_head	*lp, *next;
-	unsigned long	counter = 0;
+	unsigned long	n_swapped;
 
 	uvm_va_space_down_write(va_space);
 
 	// Reclaim blocks based on least recent transfer.
 
+	n_swapped = 0;
 	list_for_each_safe(lp, next, &uxu_va_space->lru_head) {
 		uvm_va_block_t	*block;
 
-		if (counter >= uxu_va_space->trash_nr_blocks)
+		if (n_swapped >= uxu_va_space->swapout_nr_blocks)
 			break;
 		block = list_entry(lp, uvm_va_block_t, uxu_lru);
 
-		// Terminate the loop since we cannot trash out blocks that have a copy on GPU
+		// Terminate the loop since we cannot swap out blocks that have a copy on GPU
 		if (uvm_processor_mask_get_gpu_count(&block->resident) > 0) {
 			// Encounter a block whose data are in GPU
 			continue;
 		}
 		// Evict the block if it is on CPU only and this `va_range` has the write flag.
-		if (uvm_processor_mask_get_count(&(block->resident)) > 0 && uxu_is_write_block(block)) {
+		if (uvm_processor_mask_get_count(&block->resident) > 0 && uxu_is_write_block(block)) {
 			NV_STATUS	status;
 
 			if ((status = uxu_flush_host_block(block)) != NV_OK) {
@@ -781,7 +782,7 @@ uxu_reduce_memory_consumption(uvm_va_space_t *va_space)
 		uvm_mutex_unlock(&uxu_va_space->lock_blocks);
 
 		uxu_release_block(block);
-		counter++;
+		n_swapped++;
 	}
 
 	uvm_va_space_up_write(va_space);
@@ -813,10 +814,10 @@ pagecache_reducer(void *ctx)
  *
  * @param va_space: va_space to be initialized this module with.
  *
- * @param trash_nr_blocks: maximum number of va_block UXU should evict out
+ * @param swapout_nr_blocks: maximum number of va_block UXU should evict out
  * at one time.
  *
- * @param trash_reserved_nr_pages: UXU will automatically evicts va_block
+ * @param reserved_nr_pages: UXU will automatically evicts va_block
  * when number of free pages plus number of page-cache pages less than this
  * value.
  *
@@ -827,7 +828,7 @@ pagecache_reducer(void *ctx)
  * otherwise NV_OK.
  */
 static NV_STATUS
-uxu_initialize(uvm_va_space_t *va_space, unsigned long trash_nr_blocks, unsigned long trash_reserved_nr_pages, unsigned short flags)
+uxu_initialize(uvm_va_space_t *va_space, unsigned long swapout_nr_blocks, unsigned long reserved_nr_pages, unsigned short flags)
 {
 	uvm_uxu_va_space_t *uxu_va_space = &va_space->uxu_va_space;
 
@@ -838,8 +839,8 @@ uxu_initialize(uvm_va_space_t *va_space, unsigned long trash_nr_blocks, unsigned
 		 */
 		uvm_mutex_init(&uxu_va_space->lock, UVM_LOCK_ORDER_VA_SPACE);
 		uvm_mutex_init(&uxu_va_space->lock_blocks, UVM_LOCK_ORDER_VA_SPACE_UXU);
-		uxu_va_space->trash_nr_blocks = trash_nr_blocks;
-		uxu_va_space->trash_reserved_nr_pages = trash_reserved_nr_pages;
+		uxu_va_space->swapout_nr_blocks = swapout_nr_blocks;
+		uxu_va_space->reserved_nr_pages = reserved_nr_pages;
 		uxu_va_space->flags = flags;
 		uxu_va_space->is_initailized = true;
 
@@ -960,7 +961,7 @@ NV_STATUS
 uvm_api_uxu_initialize(UVM_UXU_INITIALIZE_PARAMS *params, struct file *filp)
 {
 	uvm_va_space_t *va_space = uvm_va_space_get(filp);
-	return uxu_initialize(va_space, params->trash_nr_blocks, params->trash_reserved_nr_pages, params->flags);
+	return uxu_initialize(va_space, params->swapout_nr_blocks, params->reserved_nr_pages, params->flags);
 }
 
 NV_STATUS
