@@ -39,6 +39,10 @@
 #define UXU_FILE_FROM_BLOCK(block)	UXU_FILE_FROM_RANGE((block)->va_range)
 #define BLOCK_START_OFFSET(block)	((block)->start - (block)->va_range->node.start)
 
+struct proc_dir_entry	*procfs_entry_uxu;
+
+static atomic64_t	n_uxu_blks;
+
 /**
  * Determine if we need to reclaim some blocks or not.
  *
@@ -449,6 +453,7 @@ uxu_block_created(uvm_va_range_t *range, uvm_va_block_t *block)
                 uvm_mutex_lock(&uxu_va_space->lock_blocks);
                 list_move_tail(&block->uxu_lru, &uxu_va_space->lru_head);
                 uvm_mutex_unlock(&uxu_va_space->lock_blocks);
+		atomic64_inc(&n_uxu_blks);
 	}
 }
 
@@ -474,11 +479,16 @@ uxu_range_destroyed(uvm_va_range_t *range)
 	if (range->blocks) {
 		uvm_uxu_va_space_t	*uxu_va_space = &range->va_space->uxu_va_space;
 		uvm_va_block_t	*block, *block_tmp;
+		int	n_blks = 0;
 
                 uvm_mutex_lock(&uxu_va_space->lock_blocks);
-		for_each_va_block_in_va_range_safe(range, block, block_tmp)
+		for_each_va_block_in_va_range_safe(range, block, block_tmp) {
 			list_del_init(&block->uxu_lru);
+			n_blks++;
+		}
                 uvm_mutex_unlock(&uxu_va_space->lock_blocks);
+
+		atomic64_sub(n_blks, &n_uxu_blks);
 	}
 }
 
@@ -490,26 +500,32 @@ uxu_range_destroyed(uvm_va_range_t *range)
  * @return: always NV_OK;
  */
 static NV_STATUS
-uxu_release_block(uvm_va_block_t *va_block)
+uxu_release_block(uvm_va_block_t *block)
 {
 	uvm_va_block_t	*old;
 	size_t	index;
-	uvm_va_range_t	*va_range = va_block->va_range;
+	uvm_va_range_t	*range = block->va_range;
 
-	UVM_ASSERT(va_block != NULL);
-
-	if (va_range == NULL) {
+	if (range == NULL) {
 		/* maybe already destroyed ?? */
 		return NV_OK;
 	}
 
 	// Remove the block from the list.
-	index = uvm_va_range_block_index(va_range, va_block->start);
-	old = (uvm_va_block_t *)nv_atomic_long_cmpxchg(&va_range->blocks[index], (long)va_block, (long)NULL);
+	index = uvm_va_range_block_index(range, block->start);
+	old = (uvm_va_block_t *)nv_atomic_long_cmpxchg(&range->blocks[index], (long)block, (long)NULL);
 
 	// Free the block.
-	if (old == va_block) {
-		uvm_va_block_kill(va_block);
+	if (old == block) {
+		uvm_uxu_va_space_t	*uxu_va_space = &range->va_space->uxu_va_space;
+
+		uvm_mutex_lock(&uxu_va_space->lock_blocks);
+		list_del_init(&block->uxu_lru);
+		uvm_mutex_unlock(&uxu_va_space->lock_blocks);
+
+		atomic64_dec(&n_uxu_blks);
+
+		uvm_va_block_kill(block);
 	}
 
 	return NV_OK;
@@ -550,10 +566,6 @@ uxu_reduce_memory_consumption(uvm_va_space_t *va_space)
 			// Encounter a block whose data are in GPU
 			continue;
 		}
-		uvm_mutex_lock(&uxu_va_space->lock_blocks);
-		// Remove this block from the list and release it.
-		list_del_init(&block->uxu_lru);
-		uvm_mutex_unlock(&uxu_va_space->lock_blocks);
 
 		uxu_release_block(block);
 		n_swapped++;
@@ -684,7 +696,6 @@ uxu_map(uvm_va_space_t *va_space, UVM_UXU_MAP_PARAMS *params)
 static NV_STATUS
 uxu_remap(uvm_va_space_t *va_space, UVM_UXU_REMAP_PARAMS *params)
 {
-	uvm_uxu_va_space_t	*uxu_va_space = &va_space->uxu_va_space;
 	uvm_va_range_t	*va_range = uvm_va_range_find(va_space, (NvU64)params->uvm_addr);
 	uvm_va_block_t	*block, *block_next;
 	NvU64	expected_start_addr = (NvU64)params->uvm_addr;
@@ -703,16 +714,11 @@ uxu_remap(uvm_va_space_t *va_space, UVM_UXU_REMAP_PARAMS *params)
 	}
 
 	if (uxu_is_write_block(block)) {
-		uvm_mutex_lock(&uxu_va_space->lock);
-
 		// Volatile data is simply discarded even though it has been remapped with non-volatile
 		for_each_va_block_in_va_range_safe(va_range, block, block_next) {
 			block->is_dirty = false;
 			uxu_release_block(block);
-			list_del(&block->uxu_lru);
 		}
-
-		uvm_mutex_unlock(&uxu_va_space->lock);
 	}
 	else {
 		for_each_va_block_in_va_range_safe(va_range, block, block_next)
@@ -748,13 +754,42 @@ uvm_api_uxu_remap(UVM_UXU_REMAP_PARAMS *params, struct file *filp)
 	return uxu_remap(va_space, params);
 }
 
+static int
+nv_procfs_read_uxu_stats(struct seq_file *s, void *v)
+{
+	if (!uvm_down_read_trylock(&g_uvm_global.pm.lock))
+		return -EAGAIN;
+
+	UVM_SEQ_OR_DBG_PRINT(s, "cezanne     %llu\n", (NvU64)atomic64_read(&n_uxu_blks));
+
+	uvm_up_read(&g_uvm_global.pm.lock);
+
+	return 0;
+}
+
+static int
+nv_procfs_read_uxu_stats_entry(struct seq_file *s, void *v)
+{
+	UVM_ENTRY_RET(nv_procfs_read_uxu_stats(s, v));
+}
+
+UVM_DEFINE_SINGLE_PROCFS_FILE(uxu_stats_entry);
+
+#define UXU_STATS_PROC_ENTRY_NAME	"uxu_stats"
+
 NV_STATUS
 uxu_init(void)
 {
+	struct proc_dir_entry	*cpu_base_dir_entry = uvm_procfs_get_cpu_base_dir();
+
+        procfs_entry_uxu = NV_CREATE_PROC_FILE(UXU_STATS_PROC_ENTRY_NAME, cpu_base_dir_entry, uxu_stats_entry, NULL);
+        if (procfs_entry_uxu == NULL)
+		return NV_ERR_OPERATING_SYSTEM;
 	return NV_OK;
 }
 
 void
 uxu_exit(void)
 {
+	uvm_procfs_destroy_entry(procfs_entry_uxu);
 }
