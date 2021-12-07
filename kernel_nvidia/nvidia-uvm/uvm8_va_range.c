@@ -364,12 +364,13 @@ static void uvm_va_range_destroy_managed(uvm_va_range_t *va_range)
 
     UVM_ASSERT(va_range->type == UVM_VA_RANGE_TYPE_MANAGED);
 
+    if (uvm_is_uxu_range(va_range))
+        uxu_range_destroyed(va_range);
+
     if (va_range->blocks) {
         // Unmap and drop our ref count on each block
-        for_each_va_block_in_va_range_safe(va_range, block, block_tmp) {
-            list_del_init(&block->uxu_lru);
+        for_each_va_block_in_va_range_safe(va_range, block, block_tmp)
             uvm_va_block_kill(block);
-        }
 
         uvm_kvfree(va_range->blocks);
     }
@@ -1154,15 +1155,8 @@ NV_STATUS uvm_va_range_block_create(uvm_va_range_t *va_range, size_t index, uvm_
             uvm_va_block_release(block);
             block = old;
         }
-        else {
-            uvm_uxu_va_space_t *uxu_va_space = &va_range->va_space->uxu_va_space;
-            INIT_LIST_HEAD(&block->uxu_lru);
-            if (uvm_is_uxu_range(va_range)) {
-                uvm_mutex_lock(&uxu_va_space->lock_blocks);
-                list_move_tail(&block->uxu_lru, &uxu_va_space->lru_head);
-                uvm_mutex_unlock(&uxu_va_space->lock_blocks);
-            }
-        }
+        else
+            uxu_block_created(va_range, block);
     }
 
     *out_block = block;

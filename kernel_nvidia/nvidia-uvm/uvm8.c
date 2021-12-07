@@ -190,8 +190,6 @@ static void uvm_destroy_vma_managed(struct vm_area_struct *vma, bool make_zombie
 
     uvm_assert_rwsem_locked_write(&uvm_va_space_get(vma->vm_file)->lock);
     uvm_for_each_va_range_in_vma_safe(va_range, va_range_next, vma) {
-        if (va_range->node.uxu_rtn.filp)
-            uvm_uxu_unregister_va_range(va_range);
         // On exit_mmap (process teardown), current->mm is cleared so
         // uvm_va_range_vma_current would return NULL.
         UVM_ASSERT(uvm_va_range_vma(va_range) == vma);

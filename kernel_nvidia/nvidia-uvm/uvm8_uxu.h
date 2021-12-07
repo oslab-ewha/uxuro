@@ -17,7 +17,8 @@
 NV_STATUS uxu_init(void);
 void uxu_exit(void);
 
-NV_STATUS uvm_uxu_unregister_va_range(uvm_va_range_t *va_range);
+void uxu_block_created(uvm_va_range_t *range, uvm_va_block_t *block);
+void uxu_range_destroyed(uvm_va_range_t *range);
 
 void uxu_try_load_block(uvm_va_block_t *block,
 			uvm_va_block_retry_t *block_retry,
@@ -31,7 +32,7 @@ void stop_pagecache_reducer(uvm_va_space_t *va_space);
 /**
  * Is this va_range managed by uxu driver?
  *
- * @param va_range: va_range to be examined.
+ * @param range: va range to be examined
  * @return: true if this va_range is managed by uxu driver, false otherwise.
  */
 static inline bool

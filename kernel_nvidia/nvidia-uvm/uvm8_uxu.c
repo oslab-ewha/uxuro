@@ -439,16 +439,28 @@ uxu_flush(uvm_va_range_t *va_range)
 	return status;
 }
 
+void
+uxu_block_created(uvm_va_range_t *range, uvm_va_block_t *block)
+{
+	INIT_LIST_HEAD(&block->uxu_lru);
+	if (uvm_is_uxu_range(range)) {
+		uvm_uxu_va_space_t	*uxu_va_space = &range->va_space->uxu_va_space;
+
+                uvm_mutex_lock(&uxu_va_space->lock_blocks);
+                list_move_tail(&block->uxu_lru, &uxu_va_space->lru_head);
+                uvm_mutex_unlock(&uxu_va_space->lock_blocks);
+	}
+}
+
 /**
  * Unregister the specified va_range.
  * UXU will stop tracking this `va_range` after this point.
  *
- * @param va_range: va_range to be untracked.
+ * @param range: va range to be being destroyed
  *
- * @return: always NV_OK.
  */
-NV_STATUS
-uvm_uxu_unregister_va_range(uvm_va_range_t *range)
+void
+uxu_range_destroyed(uvm_va_range_t *range)
 {
 	struct file	*filp = UXU_FILE_FROM_RANGE(range);
 
@@ -459,7 +471,15 @@ uvm_uxu_unregister_va_range(uvm_va_range_t *range)
 
 	fput(filp);
 
-	return NV_OK;
+	if (range->blocks) {
+		uvm_uxu_va_space_t	*uxu_va_space = &range->va_space->uxu_va_space;
+		uvm_va_block_t	*block, *block_tmp;
+
+                uvm_mutex_lock(&uxu_va_space->lock_blocks);
+		for_each_va_block_in_va_range_safe(range, block, block_tmp)
+			list_del_init(&block->uxu_lru);
+                uvm_mutex_unlock(&uxu_va_space->lock_blocks);
+	}
 }
 
 /**
@@ -584,7 +604,7 @@ pagecache_reducer(void *ctx)
 static NV_STATUS
 uxu_initialize(uvm_va_space_t *va_space, unsigned long swapout_nr_blocks, unsigned long reserved_nr_pages, unsigned short flags)
 {
-	uvm_uxu_va_space_t *uxu_va_space = &va_space->uxu_va_space;
+	uvm_uxu_va_space_t	*uxu_va_space = &va_space->uxu_va_space;
 
 	if (!uxu_va_space->is_initailized) {
 		INIT_LIST_HEAD(&uxu_va_space->lru_head);
