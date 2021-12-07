@@ -39,12 +39,6 @@
 #define UXU_FILE_FROM_BLOCK(block)	UXU_FILE_FROM_RANGE((block)->va_range)
 #define BLOCK_START_OFFSET(block)	((block)->start - (block)->va_range->node.start)
 
-#define MIN(x, y) ((x) < (y) ? (x): (y))
-
-typedef void *uxu_fsdata_array_t[PAGES_PER_UVM_VA_BLOCK];
-
-static struct kmem_cache	*g_uxu_fsdata_array_cache __read_mostly;
-
 /**
  * Determine if we need to reclaim some blocks or not.
  *
@@ -501,143 +495,6 @@ uxu_release_block(uvm_va_block_t *va_block)
 	return NV_OK;
 }
 
-static NV_STATUS
-uxu_write_begin(uvm_va_block_t *va_block, void *fsdata_array[])
-{
-	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_block->va_range->node.uxu_rtn;
-	int		page_id;
-	NV_STATUS	status = NV_OK;
-
-	// Calculate the file offset based on the block start address.
-	loff_t	file_start_offset = va_block->start - va_block->va_range->node.start;
-
-	struct file	*uxu_file = uxu_rtn->filp;
-	struct inode	*f_inode = file_inode(uxu_file);
-	struct address_space	*mapping = uxu_file->f_mapping;
-	struct inode	*m_inode = mapping->host;
-	const struct address_space_operations	*a_ops = mapping->a_ops;
-
-	uvm_va_space_t	*va_space;
-
-	va_space = va_block->va_range->va_space;
-
-	inode_lock(f_inode);
-
-	current->backing_dev_info = inode_to_bdi(m_inode);
-
-	file_remove_privs(uxu_file);
-
-	file_update_time(uxu_file);
-
-	for_each_va_block_page(page_id, va_block) {
-		struct page	*page;
-		uvm_gpu_id_t	id;
-		void	*fsdata;
-		loff_t	pos;
-		long	f_status;
-
-		pos = file_start_offset + page_id * PAGE_SIZE;
-
-		if (pos >= uxu_rtn->size)
-			break;
-
-		f_status = a_ops->write_begin(uxu_file, mapping, pos, MIN(PAGE_SIZE, uxu_rtn->size - pos), 0, &page, &fsdata);
-
-		if (f_status != 0 || page == NULL)
-			continue;
-
-		if (mapping_writably_mapped(mapping))
-			flush_dcache_page(page);
-
-		fsdata_array[page_id] = fsdata;
-
-		if (va_block->cpu.pages[page_id] != NULL)
-			uxu_unmap_page(va_block, page_id);
-
-		for_each_gpu_id(id) {
-			uvm_va_block_gpu_state_t	*gpu_state = va_block->gpus[uvm_id_gpu_index(id)];
-			uvm_gpu_t	*gpu;
-
-			if (!gpu_state)
-				continue;
-
-			UVM_ASSERT(gpu_state->cpu_pages_dma_addrs[page_id] == 0);
-
-			gpu = uvm_va_space_get_gpu(va_space, id);
-
-			status = uvm_gpu_map_cpu_pages(gpu, page, PAGE_SIZE, &gpu_state->cpu_pages_dma_addrs[page_id]);
-			UVM_ASSERT(status == NV_OK);
-
-			uvm_pmm_sysmem_mappings_remove_gpu_mapping_on_eviction(&gpu->pmm_sysmem_mappings, gpu_state->cpu_pages_dma_addrs[page_id]);
-			status = uvm_pmm_sysmem_mappings_add_gpu_mapping(&gpu->pmm_sysmem_mappings,
-									 gpu_state->cpu_pages_dma_addrs[page_id],
-									 uvm_va_block_cpu_page_address(va_block, page_id),
-									 PAGE_SIZE, va_block, UVM_ID_CPU);
-			UVM_ASSERT(status == NV_OK);
-		}
-
-		if (va_block->cpu.pages[page_id] != page) {
-			if (va_block->cpu.pages[page_id]) {
-				if (uvm_page_mask_test(&va_block->cpu.pagecached, page_id))
-					put_page(va_block->cpu.pages[page_id]);
-				else
-					__free_page(va_block->cpu.pages[page_id]);
-			}
-			va_block->cpu.pages[page_id] = page;
-			get_page(page);
-		}
-		uvm_page_mask_set(&va_block->cpu.pagecached, page_id);
-	}
-
-	return status;
-}
-
-static NV_STATUS
-uxu_write_end(uvm_va_block_t *va_block, void *fsdata_array[])
-{
-	NV_STATUS	status = NV_OK;
-
-	uvm_uxu_range_tree_node_t	*uxu_rtn = &va_block->va_range->node.uxu_rtn;
-	struct file	*uxu_file = uxu_rtn->filp;
-	struct inode	*f_inode = file_inode(uxu_file);
-	struct address_space	*mapping = uxu_file->f_mapping;
-	const struct address_space_operations	*a_ops = mapping->a_ops;
-
-	int	page_id;
-
-	loff_t	file_start_offset = va_block->start - va_block->va_range->node.start;
-
-	for_each_va_block_page(page_id, va_block) {
-		struct page	*page = va_block->cpu.pages[page_id];
-		void	*fsdata = fsdata_array[page_id];
-		loff_t	pos;
-
-		pos = file_start_offset + page_id * PAGE_SIZE;
-
-		if (pos >= uxu_rtn->size)
-			break;
-
-		if (page) {
-			size_t	bytes = MIN(PAGE_SIZE, uxu_rtn->size - pos);
-
-			flush_dcache_page(page);
-			mark_page_accessed(page);
-
-			a_ops->write_end(uxu_file, mapping, pos, bytes, bytes, page, fsdata);
-
-			balance_dirty_pages_ratelimited(mapping);
-		}
-	}
-
-	va_block->is_dirty = true;
-
-	current->backing_dev_info = NULL;
-
-	inode_unlock(f_inode);
-
-	return status;
-}
-
 /**
  * Automatically reduce memory usage if we need to.
  *
@@ -874,14 +731,10 @@ uvm_api_uxu_remap(UVM_UXU_REMAP_PARAMS *params, struct file *filp)
 NV_STATUS
 uxu_init(void)
 {
-	g_uxu_fsdata_array_cache = NV_KMEM_CACHE_CREATE("uxu_fsdata_array_t", uxu_fsdata_array_t);
-	if (!g_uxu_fsdata_array_cache)
-		return NV_ERR_NO_MEMORY;
 	return NV_OK;
 }
 
 void
 uxu_exit(void)
 {
-	kmem_cache_destroy_safe(&g_uxu_fsdata_array_cache);
 }
