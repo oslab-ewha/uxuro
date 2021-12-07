@@ -32,7 +32,6 @@ typedef struct uvm_uxu_range_tree_node_t
     struct file *filp;
     unsigned short flags;
     size_t size;
-    struct iovec *iov;
 } uvm_uxu_range_tree_node_t;
 
 // Tree-based data structure for looking up and iterating over objects with

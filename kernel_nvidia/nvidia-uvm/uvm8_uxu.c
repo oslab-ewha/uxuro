@@ -457,15 +457,11 @@ NV_STATUS
 uvm_uxu_unregister_va_range(uvm_va_range_t *range)
 {
 	struct file	*filp = UXU_FILE_FROM_RANGE(range);
-	struct iovec	*iov = range->node.uxu_rtn.iov;
 
 	if (uxu_is_write_range(range) && !uxu_is_volatile_range(range)) {
 		uxu_flush(range);
 		vfs_fsync(filp, 1);
 	}
-
-	if (iov)
-		kfree(iov);
 
 	fput(filp);
 
@@ -643,95 +639,6 @@ uxu_write_end(uvm_va_block_t *va_block, void *fsdata_array[])
 }
 
 /**
- * Write the data of this `va_block` to the file.
- * Callers have to make sure that there is no duplicated data on GPU.
- *
- * @param va_space: va_space that governs this operation.
- * @param va_range: UVM va_range.
- * @param va_block: the data source.
- * @param is_evict: indicate that this function is called do to eviction not flush.
- * @param page_mask: indicate which pages to be written out to the file. Ignore
- * if NULL.
- *
- * @return: NV_OK on success. NV_ERR_* otherwise.
- */
-static NV_STATUS
-uxu_flush_host_block(uvm_va_block_t *block)
-{
-	struct file	*uxu_file;
-	mm_segment_t	fs;
-	int	page_id, page_id_prev;
-	// Compute the file start offset based on `va_block`.
-	loff_t	file_start_offset;
-	loff_t	offset;
-	struct iovec	*iov = block->va_range->node.uxu_rtn.iov;
-	unsigned int	iov_index = 0;
-	uvm_va_block_region_t	region;
-	NV_STATUS	status = NV_OK;
-
-	file_start_offset = BLOCK_START_OFFSET(block);
-	uxu_file = UXU_FILE_FROM_BLOCK(block);
-	setup_block_readable_region(block, &region);
-
-	// Switch the filesystem space to kernel space.
-	fs = get_fs();
-	set_fs(KERNEL_DS);
-
-	// Build iov based on the page addresses.
-	page_id_prev = -2;
-	offset = file_start_offset;
-	for_each_va_block_page_in_region(page_id, region) {
-		struct iov_iter	iter;
-		struct kiocb	kiocb;
-		void	*page_addr;
-
-		if (!block->cpu.pages[page_id])
-			continue;
-
-		page_addr = page_address(block->cpu.pages[page_id]);
-
-		// Perform asynchronous write.
-		if (page_id - 1 != page_id_prev && iov_index > 0) {
-			ssize_t	ret;
-
-			init_sync_kiocb(&kiocb, uxu_file);
-			kiocb.ki_pos = offset;
-			iov_iter_init(&iter, WRITE, iov, iov_index, iov_index * PAGE_SIZE);
-			ret = call_write_iter(uxu_file, &kiocb, &iter);
-			BUG_ON(ret == -EIOCBQUEUED);
-
-			iov_index = 0;
-			offset = file_start_offset + page_id * PAGE_SIZE;
-		}
-		iov[iov_index].iov_base = page_addr;
-		iov[iov_index].iov_len = PAGE_SIZE;
-		++iov_index;
-		page_id_prev = page_id;
-	}
-
-	// Start asynchronous write.
-	if (iov_index > 0) {
-		struct iov_iter	iter;
-		struct kiocb	kiocb;
-		ssize_t	ret;
-
-		init_sync_kiocb(&kiocb, uxu_file);
-		kiocb.ki_pos = offset;
-		iov_iter_init(&iter, WRITE, iov, iov_index, iov_index * PAGE_SIZE);
-		ret = call_write_iter(uxu_file, &kiocb, &iter);
-		BUG_ON(ret == -EIOCBQUEUED);
-	}
-
-	// Mark that this block has dirty data on the file.
-	block->is_dirty = true;
-
-	// Switch back to the original space.
-	set_fs(fs);
-
-	return status;
-}
-
-/**
  * Automatically reduce memory usage if we need to.
  *
  * @param va_space: va_space that governs this operation.
@@ -766,16 +673,6 @@ uxu_reduce_memory_consumption(uvm_va_space_t *va_space)
 			// Encounter a block whose data are in GPU
 			continue;
 		}
-		// Evict the block if it is on CPU only and this `va_range` has the write flag.
-		if (uvm_processor_mask_get_count(&block->resident) > 0 && uxu_is_write_block(block)) {
-			NV_STATUS	status;
-
-			if ((status = uxu_flush_host_block(block)) != NV_OK) {
-				printk(KERN_DEBUG "Cannot evict block: err: %d\n", status);
-				continue;
-			}
-		}
-
 		uvm_mutex_lock(&uxu_va_space->lock_blocks);
 		// Remove this block from the list and release it.
 		list_del_init(&block->uxu_lru);
@@ -903,13 +800,6 @@ uxu_map(uvm_va_space_t *va_space, UVM_UXU_MAP_PARAMS *params)
 
 	// Calculate the number of blocks associated with this UVM range.
 	max_nr_blocks = uvm_va_range_num_blocks(container_of(node, uvm_va_range_t, node));
-
-	uxu_rtn->iov = kmalloc(sizeof(struct iovec) * PAGES_PER_UVM_VA_BLOCK, GFP_KERNEL);
-	if (!uxu_rtn->iov) {
-		fput(uxu_rtn->filp);
-		uxu_rtn->filp = NULL;
-		return NV_ERR_NO_MEMORY;
-	}
 
 	return NV_OK;
 }
