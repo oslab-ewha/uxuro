@@ -151,14 +151,14 @@ init_module(void)
 		return UXU_ERR_UVM;
 	}
 
-	request.trash_nr_blocks = DEFAULT_SWAPOUT_NR_BLOCKS;
-	request.trash_reserved_nr_pages = DEFAULT_NR_RESERVED_PAGES;
+	request.swapout_nr_blocks = DEFAULT_SWAPOUT_NR_BLOCKS;
+	request.reserved_nr_pages = DEFAULT_NR_RESERVED_PAGES;
 	request.flags = 0;
 
 	env_val = secure_getenv(UXU_ENVNAME_NR_RESERVED_PAGES);
 	if (env_val && (nr_pages = strtol(env_val, &endptr, 10)) >= 0) {
 		if (*env_val != '\0' && *endptr == '\0')
-			request.trash_reserved_nr_pages = (unsigned long)nr_pages;
+			request.reserved_nr_pages = (unsigned long)nr_pages;
 	}
 
 	env_val = secure_getenv(UXU_ENVNAME_READAHEAD_TYPE);
