@@ -92,16 +92,15 @@ uxu_unmap_page(uvm_va_block_t *va_block, int page_index)
 	uvm_gpu_id_t	id;
 
 	for_each_gpu_id(id) {
-		uvm_gpu_t *gpu;
-		uvm_va_block_gpu_state_t *gpu_state = va_block->gpus[uvm_id_gpu_index(id)];
+		uvm_gpu_t	*gpu;
+		uvm_va_block_gpu_state_t	*gpu_state = va_block->gpus[uvm_id_gpu_index(id)];
+
 		if (!gpu_state)
 			continue;
 
 		if (gpu_state->cpu_pages_dma_addrs[page_index] == 0)
 			continue;
 
-		UVM_ASSERT(va_block->va_range);
-		UVM_ASSERT(va_block->va_range->va_space);
 		gpu = uvm_va_space_get_gpu(va_block->va_range->va_space, id);
 
 		uvm_gpu_unmap_cpu_page(gpu, gpu_state->cpu_pages_dma_addrs[page_index]);
@@ -112,7 +111,6 @@ uxu_unmap_page(uvm_va_block_t *va_block, int page_index)
 static NV_STATUS
 add_pagecache_to_block(uvm_va_block_t *block, int page_id, struct page *page)
 {
-	NV_STATUS	status = NV_OK;
 	uvm_gpu_id_t	gpu_id;
 
 	lock_page(page);
@@ -124,23 +122,28 @@ add_pagecache_to_block(uvm_va_block_t *block, int page_id, struct page *page)
 				put_page(block->cpu.pages[page_id]);
 			else
 				__free_page(block->cpu.pages[page_id]);
+			block->cpu.pages[page_id] = NULL;
 		}
 		for_each_gpu_id(gpu_id) {
 			uvm_gpu_t	*gpu;
 			uvm_va_block_gpu_state_t	*gpu_state = block->gpus[uvm_id_gpu_index(gpu_id)];
+			NV_STATUS	status;
+
 			if (!gpu_state)
 				continue;
 
 			UVM_ASSERT(gpu_state->cpu_pages_dma_addrs[page_id] == 0);
 
-			UVM_ASSERT(block->va_range);
-			UVM_ASSERT(block->va_range->va_space);
 			gpu = uvm_va_space_get_gpu(block->va_range->va_space, gpu_id);
 
 			status = uvm_gpu_map_cpu_pages(gpu, page, PAGE_SIZE, &gpu_state->cpu_pages_dma_addrs[page_id]);
 			if (status != NV_OK) {
 				printk(KERN_DEBUG "Cannot do uvm_gpu_map_cpu_pages\n");
-				goto error;
+
+				uxu_unmap_page(block, page_id);
+				unlock_page(page);
+
+				return status;
 			}
 		}
 		block->cpu.pages[page_id] = page;
@@ -152,12 +155,6 @@ add_pagecache_to_block(uvm_va_block_t *block, int page_id, struct page *page)
 	uvm_page_mask_set(&block->cpu.pagecached, page_id);
 
 	return NV_OK;
-
-error:
-	uxu_unmap_page(block, page_id);
-	unlock_page(page);
-
-	return status;
 }
 
 static struct page *
@@ -224,10 +221,7 @@ uxu_get_page(uvm_va_block_t *block, uvm_page_index_t page_index, bool zero)
 		if (!IS_ERR(page))
 			uvm_page_mask_set(&block->cpu.pagecached, page_index);
 		else {
-			page = assign_page(block, zero);
-			if (page) {
-				uvm_page_mask_clear(&block->cpu.pagecached, page_index);
-			}
+			page = NULL;
 		}
 	}
 	else {
