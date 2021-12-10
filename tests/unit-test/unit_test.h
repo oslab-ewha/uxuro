@@ -39,6 +39,7 @@ static char	fpath_tmpfile[1024];
 static uint8_t	*buf_uxu, *buf_uvm;
 static int	*d_read_result, h_read_Result;
 static BOOL	is_ascending_order;
+static BOOL	drop_cache_before_map;
 
 static void
 cleanup(void)
@@ -178,7 +179,7 @@ check_tmpfile(unsigned long size)
 }
 
 static inline void
-read_all(unsigned long size)
+read_file(unsigned long size)
 {
 	FILE	*fp;
 	char	buf[4096];
@@ -191,6 +192,20 @@ read_all(unsigned long size)
 	for (i = 0; i < size; i += 4096)
 		fread(buf, 4096, 1, fp);
 	fclose(fp);
+}
+
+static inline void
+read_byte(unsigned long offset)
+{
+	FILE	*fp;
+	uint8_t	byte;
+
+	byte = buf_uxu[offset];
+	fp = fopen("/dev/null", "w");
+	if (fp) {
+		fprintf(fp, "%hhu", byte);
+		fclose(fp);
+	}
 }
 
 static inline void
@@ -232,7 +247,8 @@ do_map_for_read(unsigned long size)
 
 	if (fpath_tmpfile[0] == '\0' && !create_tmpfile_for_read(size))
 		FAIL("cannot create file");
-
+	if (drop_cache_before_map)
+		drop_caches();
 	if ((err = uxu_map(fpath_tmpfile, size, UXU_FLAGS_READ, (void **)&buf_uxu)) != UXU_OK)
 		FAIL("failed to map for read: err: %d", err);
 }
@@ -244,7 +260,8 @@ do_map_for_write(unsigned long size)
 
 	if (!create_tmpfile_for_write(size))
 		FAIL("cannot create file");
-
+	if (drop_cache_before_map)
+		drop_caches();
 	if ((err = uxu_map(fpath_tmpfile, size, UXU_FLAGS_WRITE | UXU_FLAGS_CREATE, (void **)&buf_uxu)) != UXU_OK)
 		FAIL("failed to map for write: err: %d", err);
 }

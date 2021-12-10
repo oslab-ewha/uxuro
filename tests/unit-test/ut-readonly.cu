@@ -20,7 +20,7 @@ unit_test_cached_read(unsigned long size)
 {
 	prepare_d_result();
 	do_map_for_read(size);
-	read_all(size);
+	read_file(size);
 
 	RUN_READ_KERNEL(size);
 
@@ -29,6 +29,24 @@ unit_test_cached_read(unsigned long size)
 	cleanup();
 
 	pass("cached readonly(%dKB)", size / 1024);
+}
+
+static void
+unit_test_host_read_only(unsigned long size, unsigned long offset)
+{
+	prepare_d_result();
+
+	drop_cache_before_map = TRUE;
+	do_map_for_read(size);
+	drop_cache_before_map = FALSE;
+
+	read_byte(offset);
+
+	do_unmap_for_read();
+
+	cleanup();
+
+	pass("fault by host read (%dKB)", size / 1024);
 }
 
 static void
@@ -67,6 +85,9 @@ main(int argc, char *argv[])
 	unit_test_read(8000 * 4096);
 
 	unit_test_cached_read(5 * MB);
+
+	unit_test_host_read_only(4 * KB, 0);
+	unit_test_host_read_only(256 * MB, 128 * MB);
 
 	unit_test_multi_read(5 * MB);
 
