@@ -25,7 +25,6 @@ static NV_STATUS block_copy_resident_pages_mask(uvm_va_block_t *block,
 static inline NV_STATUS
 uxu_block_populate_page_cpu(uvm_va_block_t *block, uvm_page_index_t page_index, bool zero)
 {
-	uvm_va_block_test_t	*block_test = uvm_va_block_get_test(block);
 	struct page	*page;
 	NV_STATUS	status;
 
@@ -33,11 +32,6 @@ uxu_block_populate_page_cpu(uvm_va_block_t *block, uvm_page_index_t page_index, 
 		return NV_OK;
 
 	UVM_ASSERT(!uvm_page_mask_test(&block->cpu.resident, page_index));
-
-	// Return out of memory error if the tests have requested it. As opposed to
-	// other error injection settings, this one is persistent.
-	if (block_test && block_test->inject_cpu_pages_allocation_error)
-		return NV_ERR_NO_MEMORY;
 
 	page = uxu_get_page(block, page_index, zero);
 	if (page == NULL)

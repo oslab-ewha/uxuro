@@ -6,6 +6,7 @@
 #include <linux/fs.h>
 #include <linux/backing-dev.h>
 #include <linux/uio.h>
+#include <linux/buffer_head.h>
 
 #include "nv_uvm_interface.h"
 #include "uvm8_api.h"
@@ -113,44 +114,30 @@ add_pagecache_to_block(uvm_va_block_t *block, int page_id, struct page *page)
 {
 	uvm_gpu_id_t	gpu_id;
 
-	if (block->cpu.pages[page_id] != page) {
-		if (block->cpu.pages[page_id] != NULL) {
+	UVM_ASSERT(block->cpu.pages[page_id] == NULL);
+
+	for_each_gpu_id(gpu_id) {
+		uvm_gpu_t	*gpu;
+		uvm_va_block_gpu_state_t	*gpu_state = block->gpus[uvm_id_gpu_index(gpu_id)];
+		NV_STATUS	status;
+
+		if (!gpu_state)
+			continue;
+
+		UVM_ASSERT(gpu_state->cpu_pages_dma_addrs[page_id] == 0);
+
+		gpu = uvm_va_space_get_gpu(block->va_range->va_space, gpu_id);
+
+		status = uvm_gpu_map_cpu_pages(gpu, page, PAGE_SIZE, &gpu_state->cpu_pages_dma_addrs[page_id]);
+		if (status != NV_OK) {
+			printk(KERN_DEBUG "Cannot do uvm_gpu_map_cpu_pages\n");
+
 			uxu_unmap_page(block, page_id);
-			if (uvm_page_mask_test(&block->cpu.pagecached, page_id))
-				put_page(block->cpu.pages[page_id]);
-			else
-				__free_page(block->cpu.pages[page_id]);
-			block->cpu.pages[page_id] = NULL;
+
+			return status;
 		}
-		for_each_gpu_id(gpu_id) {
-			uvm_gpu_t	*gpu;
-			uvm_va_block_gpu_state_t	*gpu_state = block->gpus[uvm_id_gpu_index(gpu_id)];
-			NV_STATUS	status;
-
-			if (!gpu_state)
-				continue;
-
-			UVM_ASSERT(gpu_state->cpu_pages_dma_addrs[page_id] == 0);
-
-			gpu = uvm_va_space_get_gpu(block->va_range->va_space, gpu_id);
-
-			status = uvm_gpu_map_cpu_pages(gpu, page, PAGE_SIZE, &gpu_state->cpu_pages_dma_addrs[page_id]);
-			if (status != NV_OK) {
-				printk(KERN_DEBUG "Cannot do uvm_gpu_map_cpu_pages\n");
-
-				uxu_unmap_page(block, page_id);
-
-				return status;
-			}
-		}
-		block->cpu.pages[page_id] = page;
 	}
-	else {
-		put_page(page);
-	}
-
-	uvm_page_mask_set(&block->cpu.pagecached, page_id);
-
+	block->cpu.pages[page_id] = page;
 	return NV_OK;
 }
 
@@ -215,8 +202,14 @@ uxu_get_page(uvm_va_block_t *block, uvm_page_index_t page_index, bool zero)
 
 	if (uxu_is_pagecachable(block, page_index)) {
 		page = assign_pagecache(block, page_index);
-		if (!IS_ERR(page))
+		if (!IS_ERR(page)) {
 			uvm_page_mask_set(&block->cpu.pagecached, page_index);
+			if (!page_has_buffers(page)) {
+				create_empty_buffers(page, block->va_range->node.uxu_rtn.filp->f_mapping->host->i_sb->s_blocksize, BIT(BH_Dirty) | BIT(BH_Uptodate));
+			}
+			/* TODO: It seems to be natural that marking a mapped page as dirty. */
+			SetPageDirty(page);
+		}
 		else {
 			page = NULL;
 		}
@@ -263,7 +256,7 @@ load_pagecaches_for_block(uvm_va_block_t *block)
 		struct page	*page;
 		int	ret;
 
-		page = assign_pagecache(block, page_id);
+		page = uxu_get_page(block, page_id, false);
 		if (page == NULL) {
 			printk(KERN_DEBUG "failed to assign pagecache(block: %llx, page_id: %d\n", block->start, page_id);
 			return false;
