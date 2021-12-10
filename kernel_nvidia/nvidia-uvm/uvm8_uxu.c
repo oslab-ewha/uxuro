@@ -113,8 +113,6 @@ add_pagecache_to_block(uvm_va_block_t *block, int page_id, struct page *page)
 {
 	uvm_gpu_id_t	gpu_id;
 
-	lock_page(page);
-
 	if (block->cpu.pages[page_id] != page) {
 		if (block->cpu.pages[page_id] != NULL) {
 			uxu_unmap_page(block, page_id);
@@ -141,7 +139,6 @@ add_pagecache_to_block(uvm_va_block_t *block, int page_id, struct page *page)
 				printk(KERN_DEBUG "Cannot do uvm_gpu_map_cpu_pages\n");
 
 				uxu_unmap_page(block, page_id);
-				unlock_page(page);
 
 				return status;
 			}
@@ -233,29 +230,6 @@ uxu_get_page(uvm_va_block_t *block, uvm_page_index_t page_index, bool zero)
 	return page;
 }
 
-static bool
-load_pagecaches_for_block(uvm_va_block_t *block, uvm_va_block_region_t region)
-{
-	int	page_id;
-
-	// Fill in page-cache pages to va_block
-	for_each_va_block_page_in_region(page_id, region) {
-		struct page	*page;
-		int	ret;
-
-		page = assign_pagecache(block, page_id);
-		if (page == NULL) {
-			printk(KERN_DEBUG "failed to assign pagecache(block: %llx, page_id: %d\n", block->start, page_id);
-			return false;
-		}
-		ret = add_pagecache_to_block(block, page_id, page);
-		if (ret != NV_OK)
-			put_page(page);
-	}
-
-	return true;
-}
-
 static void
 setup_block_readable_region(uvm_va_block_t *block, uvm_va_block_region_t *pregion)
 {
@@ -277,77 +251,36 @@ setup_block_readable_region(uvm_va_block_t *block, uvm_va_block_region_t *pregio
 	pregion->first = 0;
 }
 
-/**
- * @param block: data will be put in this va_block.
- * @param block_retry: need this to allocate memory pages and register them to
- * this UVM range.
- * @param service_context: need it the same as block_retry.
- * @return: NV_OK on success. NV_ERR_* otherwise.
- */
-static NV_STATUS
-uxu_read_begin(uvm_va_block_t *block, uvm_va_block_retry_t *block_retry, uvm_service_block_context_t *service_context)
-{
-	uvm_va_block_region_t	region;
-	uvm_page_mask_t	page_mask, page_mask_saved;
-	NV_STATUS	status;
-
-	// Specify that the entire block is the region of concern.
-	setup_block_readable_region(block, &region);
-
-	uvm_page_mask_copy(&page_mask_saved, &service_context->block_context.make_resident.page_mask);
-
-	uvm_page_mask_init_from_region(&service_context->block_context.make_resident.page_mask, region, NULL);
-	uvm_page_mask_copy(&page_mask, &service_context->block_context.make_resident.page_mask);
-
-	// Change this va_block's state: all pages are the residents of CPU.
-	status = uvm_va_block_make_resident(block, block_retry, &service_context->block_context,
-					    UVM_ID_CPU, region, &page_mask, NULL, UVM_MAKE_RESIDENT_CAUSE_UXU);
-
-	if (status != NV_OK) {
-		printk(KERN_DEBUG "Cannot make temporary resident on CPU\n");
-		goto error;
-	}
-
-	status = uvm_tracker_wait(&block->tracker);
-	if (status != NV_OK) {
-		printk(KERN_DEBUG "Cannot make temporary resident on CPU\n");
-		goto error;
-	}
-
-	if (load_pagecaches_for_block(block, region))
-		block->is_loaded = true;
-	else
-		status = NV_ERR_OPERATING_SYSTEM;
-
-error:
-	// Put back the original mask.
-	uvm_page_mask_copy(&service_context->block_context.make_resident.page_mask, &page_mask_saved);
-
-	return status;
-}
-
-static NV_STATUS
-uxu_read_end(uvm_va_block_t *block)
+static bool
+load_pagecaches_for_block(uvm_va_block_t *block)
 {
 	uvm_va_block_region_t	region;
 	int	page_id;
 
 	setup_block_readable_region(block, &region);
-
+	// Fill in page-cache pages to va_block
 	for_each_va_block_page_in_region(page_id, region) {
-		struct page	*page = block->cpu.pages[page_id];
-		if (page)
-			unlock_page(page);
+		struct page	*page;
+		int	ret;
+
+		page = assign_pagecache(block, page_id);
+		if (page == NULL) {
+			printk(KERN_DEBUG "failed to assign pagecache(block: %llx, page_id: %d\n", block->start, page_id);
+			return false;
+		}
+		ret = add_pagecache_to_block(block, page_id, page);
+		if (ret != NV_OK)
+			put_page(page);
+		uvm_page_mask_set(&block->cpu.resident, page_id);
 	}
 
-	return NV_OK;
+	uvm_processor_mask_set(&block->resident, UVM_ID_CPU);
+	return true;
 }
 
 void
 uxu_try_load_block(uvm_va_block_t *block, uvm_va_block_retry_t *block_retry, uvm_service_block_context_t *service_context, uvm_processor_id_t processor_id)
 {
-	NV_STATUS	status;
-
 	if (block->is_loaded)
 		return;
 	if (uxu_is_volatile_block(block))
@@ -355,12 +288,9 @@ uxu_try_load_block(uvm_va_block_t *block, uvm_va_block_retry_t *block_retry, uvm
 	if (!uxu_is_read_block(block) && !UVM_ID_IS_CPU(processor_id))
 		return;
 
-	status = uxu_read_begin(block, block_retry, service_context);
-	if (status != NV_OK)
-		return;
-
-	uvm_tracker_wait(&block->tracker);
-	uxu_read_end(block);
+	// Specify that the entire block is the region of concern.
+	if (load_pagecaches_for_block(block))
+		block->is_loaded = true;
 
 	uxu_block_mark_recent_in_buffer(block);
 }

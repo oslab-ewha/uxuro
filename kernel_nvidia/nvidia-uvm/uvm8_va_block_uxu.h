@@ -86,9 +86,8 @@ uxubk_copy_resident_pages_mask(uvm_va_block_t *block,
 	uvm_make_resident_cause_t	cause = block_context->make_resident.cause;
 
 	if (!uvm_is_uxu_block(block) ||
-	    (cause != UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && cause != UVM_MAKE_RESIDENT_CAUSE_UXU) ||
-	    cause == UVM_MAKE_RESIDENT_CAUSE_UXU ||
-	    (cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE && UVM_ID_IS_CPU(dst_id) && uxu_is_write_block(block))) {
+	    cause != UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE ||
+	    (UVM_ID_IS_CPU(dst_id) && uxu_is_write_block(block))) {
 		return block_copy_resident_pages_mask(block,
 						      block_context,
 						      dst_id,
