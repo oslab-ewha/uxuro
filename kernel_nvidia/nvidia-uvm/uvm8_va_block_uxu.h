@@ -85,24 +85,15 @@ uxubk_copy_resident_pages_mask(uvm_va_block_t *block,
 {
 	uvm_make_resident_cause_t	cause = block_context->make_resident.cause;
 
-	if (!uvm_is_uxu_block(block) ||
-	    cause != UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE ||
-	    (UVM_ID_IS_CPU(dst_id) && uxu_is_write_block(block))) {
-		return block_copy_resident_pages_mask(block,
-						      block_context,
-						      dst_id,
-						      src_processor_mask,
-						      region,
-						      page_mask,
-						      prefetch_page_mask,
-						      transfer_mode,
-						      max_pages_to_copy,
-						      migrated_pages,
-						      copied_pages_out,
-						      tracker_out);
-	}
+	if (uvm_is_uxu_block(block) && cause == UVM_MAKE_RESIDENT_CAUSE_API_MIGRATE &&
+	    (!UVM_ID_IS_CPU(dst_id) || !uxu_is_write_block(block)))
+		return NV_OK;
 
-	return NV_OK;
+	return block_copy_resident_pages_mask(block, block_context,
+					      dst_id, src_processor_mask,
+					      region, page_mask, prefetch_page_mask,
+					      transfer_mode, max_pages_to_copy,
+					      migrated_pages, copied_pages_out, tracker_out);
 }
 
 #endif

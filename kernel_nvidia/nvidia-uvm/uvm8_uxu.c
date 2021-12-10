@@ -285,13 +285,12 @@ uxu_try_load_block(uvm_va_block_t *block, uvm_va_block_retry_t *block_retry, uvm
 		return;
 	if (uxu_is_volatile_block(block))
 		return;
-	if (!uxu_is_read_block(block) && !UVM_ID_IS_CPU(processor_id))
-		return;
+	if (uxu_is_read_block(block)) {
+		if (!load_pagecaches_for_block(block))
+			return;
+	}
 
-	// Specify that the entire block is the region of concern.
-	if (load_pagecaches_for_block(block))
-		block->is_loaded = true;
-
+	block->is_loaded = TRUE;
 	uxu_block_mark_recent_in_buffer(block);
 }
 
