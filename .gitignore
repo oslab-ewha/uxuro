@@ -41,6 +41,13 @@ Makefile
 /kernel_nvidia/conftest*.c
 /kernel_nvidia/modules.order
 /kernel_nvidia/nv_compiler.h
+/kernel_nvidia.450.80.2/.cache.mk
+/kernel_nvidia.450.80.2/.tmp_versions/
+/kernel_nvidia.450.80.2/Module.symvers
+/kernel_nvidia.450.80.2/conftest/
+/kernel_nvidia.450.80.2/conftest*.c
+/kernel_nvidia.450.80.2/modules.order
+/kernel_nvidia.450.80.2/nv_compiler.h
 /stamp-h1
 /tests/sanity-basic/Makefile
 /tests/sanity-basic/readtest

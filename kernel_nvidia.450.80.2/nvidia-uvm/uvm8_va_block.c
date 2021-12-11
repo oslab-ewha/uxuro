@@ -38,6 +38,7 @@
 #include "uvm8_mem.h"
 #include "uvm8_gpu_access_counters.h"
 #include "uvm8_test_ioctl.h"
+#include "uvm8_va_block_uxu.h"
 
 typedef enum
 {
@@ -1939,7 +1940,7 @@ static NV_STATUS block_populate_pages(uvm_va_block_t *block,
         resident_somewhere = !uvm_processor_mask_empty(&resident_on);
 
         // For pages not resident anywhere, need to populate with zeroed memory
-        status = block_populate_page_cpu(block, page_index, !resident_somewhere);
+        status = uxubk_populate_page_cpu(block, page_index, !resident_somewhere);
         if (status != NV_OK)
             return status;
     }
@@ -2638,7 +2639,7 @@ static NV_STATUS block_copy_resident_pages_mask(uvm_va_block_t *block,
                                                 uvm_va_block_region_t region,
                                                 const uvm_page_mask_t *page_mask,
                                                 const uvm_page_mask_t *prefetch_page_mask,
-                                                block_transfer_mode_internal_t transfer_mode,
+                                                int transfer_mode,
                                                 NvU32 max_pages_to_copy,
                                                 uvm_page_mask_t *migrated_pages,
                                                 NvU32 *copied_pages_out,
@@ -2851,7 +2852,7 @@ static NV_STATUS block_copy_resident_pages(uvm_va_block_t *block,
                                      BLOCK_TRANSFER_MODE_INTERNAL_MOVE_TO_STAGE;
     }
 
-    status = block_copy_resident_pages_mask(block,
+    status = uxubk_copy_resident_pages_mask(block,
                                             block_context,
                                             UVM_ID_CPU,
                                             &src_processor_mask,
@@ -7775,6 +7776,10 @@ static void block_kill(uvm_va_block_t *block)
             if (block->cpu.pages[page_index]) {
                 // be conservative.
                 // Tell the OS we wrote to the page because we sometimes clear the dirty bit after writing to it.
+                if (uvm_page_mask_test(&block->cpu.pagecached, page_index)) {
+                    put_page(block->cpu.pages[page_index]);
+                    continue;
+                }
                 SetPageDirty(block->cpu.pages[page_index]);
                 __free_page(block->cpu.pages[page_index]);
             }
@@ -7786,6 +7791,7 @@ static void block_kill(uvm_va_block_t *block)
         // Clearing the resident bit isn't strictly necessary since this block
         // is getting destroyed, but it keeps state consistent for assertions.
         uvm_page_mask_zero(&block->cpu.resident);
+        uvm_page_mask_zero(&block->cpu.pagecached);
         block_clear_resident_processor(block, UVM_ID_CPU);
 
         uvm_kvfree(block->cpu.pages);
@@ -9540,6 +9546,9 @@ NV_STATUS uvm_va_block_service_locked(uvm_processor_id_t processor_id,
             uvm_page_mask_andnot(&service_context->block_context.caller_page_mask,
                                  new_residency_mask,
                                  &service_context->read_duplicate_mask)) {
+            if (uvm_is_uxu_block(va_block))
+                uxu_try_load_block(va_block, block_retry, service_context, processor_id);
+
             status = uvm_va_block_make_resident(va_block,
                                                 block_retry,
                                                 &service_context->block_context,

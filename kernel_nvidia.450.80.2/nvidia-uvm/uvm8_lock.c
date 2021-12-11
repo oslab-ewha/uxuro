@@ -27,7 +27,7 @@
 
 const char *uvm_lock_order_to_string(uvm_lock_order_t lock_order)
 {
-    BUILD_BUG_ON(UVM_LOCK_ORDER_COUNT != 26);
+    BUILD_BUG_ON(UVM_LOCK_ORDER_COUNT != 27);
 
     switch (lock_order) {
         UVM_ENUM_STRING_CASE(UVM_LOCK_ORDER_INVALID);
@@ -54,6 +54,7 @@ const char *uvm_lock_order_to_string(uvm_lock_order_t lock_order)
         UVM_ENUM_STRING_CASE(UVM_LOCK_ORDER_TOOLS_VA_SPACE_LIST);
         UVM_ENUM_STRING_CASE(UVM_LOCK_ORDER_VA_SPACE_EVENTS);
         UVM_ENUM_STRING_CASE(UVM_LOCK_ORDER_VA_SPACE_TOOLS);
+        UVM_ENUM_STRING_CASE(UVM_LOCK_ORDER_VA_SPACE_UXU);
         UVM_ENUM_STRING_CASE(UVM_LOCK_ORDER_SEMA_POOL_TRACKER);
         UVM_ENUM_STRING_CASE(UVM_LOCK_ORDER_LEAF);
         UVM_ENUM_STRING_DEFAULT();

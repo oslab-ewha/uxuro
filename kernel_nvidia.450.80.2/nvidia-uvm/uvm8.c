@@ -35,6 +35,7 @@
 #include "uvm_linux_ioctl.h"
 #include "uvm8_hmm.h"
 #include "uvm8_mem.h"
+#include "uvm8_uxu.h"
 
 #define NVIDIA_UVM_DEVICE_NAME          "nvidia-uvm"
 
@@ -937,6 +938,10 @@ static long uvm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_CLEAN_UP_ZOMBIE_RESOURCES,      uvm_api_clean_up_zombie_resources);
         UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_POPULATE_PAGEABLE,              uvm_api_populate_pageable);
         UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_VALIDATE_VA_RANGE,              uvm_api_validate_va_range);
+
+        UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_UXU_INITIALIZE,                 uvm_api_uxu_initialize);
+        UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_UXU_MAP,                        uvm_api_uxu_map);
+        UVM_ROUTE_CMD_STACK_INIT_CHECK(UVM_UXU_REMAP,                      uvm_api_uxu_remap);
     }
 
     // Try the test ioctls if none of the above matched

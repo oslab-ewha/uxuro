@@ -31,6 +31,7 @@
 #include "uvm8_map_external.h"
 #include "uvm8_perf_thrashing.h"
 #include "nv_uvm_interface.h"
+#include "uvm8_uxu.h"
 
 static struct kmem_cache *g_uvm_va_range_cache __read_mostly;
 static struct kmem_cache *g_uvm_vma_wrapper_cache __read_mostly;
@@ -362,6 +363,9 @@ static void uvm_va_range_destroy_managed(uvm_va_range_t *va_range)
     NV_STATUS status;
 
     UVM_ASSERT(va_range->type == UVM_VA_RANGE_TYPE_MANAGED);
+
+    if (uvm_is_uxu_range(va_range))
+        uxu_range_destroyed(va_range);
 
     if (va_range->blocks) {
         // Unmap and drop our ref count on each block
@@ -1151,6 +1155,8 @@ NV_STATUS uvm_va_range_block_create(uvm_va_range_t *va_range, size_t index, uvm_
             uvm_va_block_release(block);
             block = old;
         }
+        else
+            uxu_block_created(va_range, block);
     }
 
     *out_block = block;

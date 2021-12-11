@@ -345,6 +345,9 @@ struct uvm_va_block_struct
         // overhead on the whole.
         uvm_page_mask_t resident;
 
+        // mask for page caches which should be released via put_page()
+        uvm_page_mask_t pagecached;
+
         // Per-page array of physical pages. This array scales dynamically with
         // the block size.
         //
@@ -452,6 +455,11 @@ struct uvm_va_block_struct
     nv_kthread_q_item_t eviction_mappings_q_item;
 
     uvm_perf_module_data_desc_t perf_modules_data[UVM_PERF_MODULE_TYPE_COUNT];
+
+    // A loaded block means that it has been loaded from storage by UXU.
+    bool is_loaded;
+    bool is_dirty;
+    struct list_head uxu_lru;
 };
 
 // We define additional per-VA Block fields for testing. When

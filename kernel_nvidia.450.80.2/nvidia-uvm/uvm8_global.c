@@ -38,6 +38,7 @@
 #include "uvm8_gpu_access_counters.h"
 #include "uvm8_va_space_mm.h"
 #include "nv_uvm_interface.h"
+#include "uvm8_uxu.h"
 
 static int uvm8_ats_mode = 1;
 module_param(uvm8_ats_mode, int, S_IRUGO);
@@ -166,6 +167,12 @@ NV_STATUS uvm_global_init(void)
         goto error;
     }
 
+    status = uxu_init();
+    if (status != NV_OK) {
+        UVM_ERR_PRINT("uxu_init() failed: %s\n", nvstatusToString(status));
+        goto error;
+    }
+
     status = uvm_range_group_init();
     if (status != NV_OK) {
         UVM_ERR_PRINT("uvm_range_group_init() failed: %s\n", nvstatusToString(status));
@@ -218,6 +225,7 @@ void uvm_global_exit(void)
     uvm_perf_heuristics_exit();
     uvm_perf_events_exit();
     uvm_migrate_exit();
+    uxu_exit();
     uvm_range_group_exit();
     uvm_va_range_exit();
     uvm_mem_global_exit();

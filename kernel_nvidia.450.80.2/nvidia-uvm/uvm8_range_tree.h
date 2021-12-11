@@ -27,6 +27,13 @@
 #include "uvm_linux.h"
 #include "nvstatus.h"
 
+typedef struct uvm_uxu_range_tree_node_t
+{
+    struct file *filp;
+    unsigned short flags;
+    size_t size;
+} uvm_uxu_range_tree_node_t;
+
 // Tree-based data structure for looking up and iterating over objects with
 // provided [start, end] ranges. The ranges are not allowed to overlap.
 //
@@ -51,6 +58,7 @@ typedef struct uvm_range_tree_node_struct
 
     struct rb_node rb_node;
     struct list_head list;
+    uvm_uxu_range_tree_node_t uxu_rtn;
 } uvm_range_tree_node_t;
 
 
