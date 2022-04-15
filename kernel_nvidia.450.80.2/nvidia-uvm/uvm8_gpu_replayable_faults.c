@@ -1453,7 +1453,7 @@ static NV_STATUS service_fault_batch(uvm_gpu_t *gpu,
 
         UVM_ASSERT(current_entry->va_space);
 
-	printk("uXuA:%llx,%llu,%d,%d\n", current_entry->fault_address, current_entry->timestamp,
+	printk("uXuAf:%llx,%llu,%d,%d\n", current_entry->fault_address, current_entry->timestamp,
 	       current_entry->fault_type, current_entry->fault_access_type);
 
         if (current_entry->va_space != va_space) {

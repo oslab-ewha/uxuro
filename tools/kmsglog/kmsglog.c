@@ -11,6 +11,7 @@
 #define BUF_SIZE	16384
 
 static int	finished = 0;
+static FILE	*fp_f, *fp_e;
 
 static void
 sighandler(int signum, siginfo_t *info, void *ptr)
@@ -41,17 +42,45 @@ find_nr(char *buf, unsigned nbuf)
 	return NULL;
 }
 
+static unsigned long long
+get_kmsg_ts(char *buf)
+{
+	unsigned long long	ts;
+
+	if (sscanf(buf, "%*u,%*u,%llu,", &ts) == 1)
+		return ts;
+	return 0;
+}
+
 static void
 process_kmsg(char *buf)
 {
 	char	*semi;
+	unsigned long long	ts;
+	FILE	*fp_out = NULL;
 
 	semi = strchr(buf, ';');
 	if (semi == NULL)
 		return;
-	if (strncmp(semi + 1, "uXuA:", 5) != 0)
+	*semi = '\0';
+
+	ts = get_kmsg_ts(buf);
+	if (ts == 0)
 		return;
-	printf("%s\n", semi + 6);
+	if (strncmp(semi + 1, "uXuA", 4) != 0)
+		return;
+	if (semi[5] == 'f')
+		fp_out = fp_f;
+	else if (semi[5] == 'e')
+		fp_out = fp_e;
+	else
+		return;
+	if (semi[6] != ':')
+		return;
+	if (fp_out == NULL)
+		printf("%llx,%s\n", ts, semi + 7);
+	else
+		fprintf(fp_out, "%llx,%s\n", ts, semi + 7);
 }
 
 static void
@@ -66,7 +95,7 @@ dump_kmsg(int fd)
 
 		nread = read(fd, buf + nbufs, BUF_SIZE - nbufs);
 		if (nread < 0) {
-			if (errno != EAGAIN) {
+			if (errno != EAGAIN && errno != EPIPE) {
 				fprintf(stderr, "failed to read: err: %d\n", errno);
 				break;
 			}
@@ -110,10 +139,31 @@ main(int argc, char *argv[])
 	}
 	lseek(fd, 0, SEEK_END);
 
+	if (argc > 1) {
+		char	fpath[256];
+
+		snprintf(fpath, 256, "%s.f.txt", argv[1]);
+		fp_f = fopen(fpath, "w");
+		if (fp_f == NULL) {
+			fprintf(stderr, "failed to create: %s\n", fpath);
+			exit(1);
+		}
+		snprintf(fpath, 256, "%s.e.txt", argv[1]);
+		fp_e = fopen(fpath, "w");
+		if (fp_e == NULL) {
+			fprintf(stderr, "failed to create: %s\n", fpath);
+			exit(1);
+		}
+	}
+
 	setup_signals();
 
 	dump_kmsg(fd);
 
 	close(fd);
+	if (fp_f)
+		fclose(fp_f);
+	if (fp_e)
+		fclose(fp_e);
 	return 0;
 }

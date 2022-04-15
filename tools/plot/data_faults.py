@@ -19,10 +19,10 @@ class DataFaults:
         ts_max = None
 
         for row in reader:
-            fault_addr = int(row[0], 16)
-            ts = int(row[1])
-            ftype = int(row[2])
-            acctype = int(row[3])
+            fault_addr = int(row[1], 16)
+            ts = int(row[2])
+            ftype = int(row[3])
+            acctype = int(row[4])
             if not fault_addr_min or fault_addr_min > fault_addr:
                 fault_addr_min = fault_addr
             if not fault_addr_max or fault_addr_max < fault_addr:
