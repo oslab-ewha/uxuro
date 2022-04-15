@@ -11,6 +11,9 @@
 *.err
 *.cmd
 *~
+.idea
+venv
+__pycache__
 bin/
 kernel
 *.o.ur-safe
