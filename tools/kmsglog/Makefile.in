@@ -86,8 +86,8 @@ POST_INSTALL = :
 NORMAL_UNINSTALL = :
 PRE_UNINSTALL = :
 POST_UNINSTALL = :
-noinst_PROGRAMS = srad.gen$(EXEEXT) srad$(EXEEXT)
-subdir = examples/srad_v2
+noinst_PROGRAMS = kmsglog$(EXEEXT)
+subdir = tools/kmsglog
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/cuda.m4 \
 	$(top_srcdir)/configure.ac
@@ -99,15 +99,9 @@ CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 PROGRAMS = $(noinst_PROGRAMS)
-am_srad_OBJECTS = srad.$(OBJEXT)
-srad_OBJECTS = $(am_srad_OBJECTS)
-am__DEPENDENCIES_1 =
-am__DEPENDENCIES_2 = ../common/libutil.a ../common/libutil.a \
-	$(top_srcdir)/library/libuxu.a $(am__DEPENDENCIES_1)
-srad_DEPENDENCIES = $(am__DEPENDENCIES_2)
-am_srad_gen_OBJECTS = srad_gen-srad_gen.$(OBJEXT)
-srad_gen_OBJECTS = $(am_srad_gen_OBJECTS)
-srad_gen_DEPENDENCIES = $(am__DEPENDENCIES_2)
+am_kmsglog_OBJECTS = kmsglog.$(OBJEXT)
+kmsglog_OBJECTS = $(am_kmsglog_OBJECTS)
+kmsglog_LDADD = $(LDADD)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -123,12 +117,8 @@ am__v_at_1 =
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__maybe_remake_depfiles = depfiles
-am__depfiles_remade = ./$(DEPDIR)/srad_gen-srad_gen.Po
+am__depfiles_remade = ./$(DEPDIR)/kmsglog.Po
 am__mv = mv -f
-AM_V_lt = $(am__v_lt_@AM_V@)
-am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
-am__v_lt_0 = --silent
-am__v_lt_1 = 
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
 AM_V_CC = $(am__v_CC_@AM_V@)
@@ -141,8 +131,8 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(srad_SOURCES) $(srad_gen_SOURCES)
-DIST_SOURCES = $(srad_SOURCES) $(srad_gen_SOURCES)
+SOURCES = $(kmsglog_SOURCES)
+DIST_SOURCES = $(kmsglog_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -167,8 +157,7 @@ am__define_uniq_tagged_files = \
   done | $(am__uniquify_input)`
 ETAGS = etags
 CTAGS = ctags
-am__DIST_COMMON = $(srcdir)/Makefile.in $(top_srcdir)/depcomp \
-	$(top_srcdir)/makefile.cu
+am__DIST_COMMON = $(srcdir)/Makefile.in $(top_srcdir)/depcomp
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 ACLOCAL = @ACLOCAL@
 AMTAR = @AMTAR@
@@ -277,22 +266,12 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 CLEANFILES = *~
 DISTCLEANFILES = *~
-srad_SOURCES = srad.cu
-srad_gen_SOURCES = srad_gen.c
-AM_CPPFLAGS = -I../common
-common_CFLAGS = $(CUDA_INC) -I$(top_srcdir)/library -I../common
-common_LDADD = -lcuda -lcudart ../common/libutil.a ../common/libutil.a $(top_srcdir)/library/libuxu.a $(GLIB_LIBS)
-srad_CFLAGS = $(common_CFLAGS) -DCUDAMEMCPY
-srad_LDADD = $(common_LDADD)
-srad_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
-srad_gen_CFLAGS = $(common_CFLAGS) -DGENERATOR
-srad_gen_LDADD = $(common_LDADD)
-srad_gen_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
+kmsglog_SOURCES = kmsglog.c
 all: all-am
 
 .SUFFIXES:
-.SUFFIXES: .c .cu .o .obj
-$(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am $(top_srcdir)/makefile.cu $(am__configure_deps)
+.SUFFIXES: .c .o .obj
+$(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am  $(am__configure_deps)
 	@for dep in $?; do \
 	  case '$(am__configure_deps)' in \
 	    *$$dep*) \
@@ -301,9 +280,9 @@ $(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am $(top_srcdir
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign examples/srad_v2/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign tools/kmsglog/Makefile'; \
 	$(am__cd) $(top_srcdir) && \
-	  $(AUTOMAKE) --foreign examples/srad_v2/Makefile
+	  $(AUTOMAKE) --foreign tools/kmsglog/Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \
 	  *config.status*) \
@@ -312,7 +291,6 @@ Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	    echo ' cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@ $(am__maybe_remake_depfiles)'; \
 	    cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@ $(am__maybe_remake_depfiles);; \
 	esac;
-$(top_srcdir)/makefile.cu $(am__empty):
 
 $(top_builddir)/config.status: $(top_srcdir)/configure $(CONFIG_STATUS_DEPENDENCIES)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
@@ -326,13 +304,9 @@ $(am__aclocal_m4_deps):
 clean-noinstPROGRAMS:
 	-test -z "$(noinst_PROGRAMS)" || rm -f $(noinst_PROGRAMS)
 
-srad$(EXEEXT): $(srad_OBJECTS) $(srad_DEPENDENCIES) $(EXTRA_srad_DEPENDENCIES) 
-	@rm -f srad$(EXEEXT)
-	$(AM_V_GEN)$(srad_LINK) $(srad_OBJECTS) $(srad_LDADD) $(LIBS)
-
-srad.gen$(EXEEXT): $(srad_gen_OBJECTS) $(srad_gen_DEPENDENCIES) $(EXTRA_srad_gen_DEPENDENCIES) 
-	@rm -f srad.gen$(EXEEXT)
-	$(AM_V_GEN)$(srad_gen_LINK) $(srad_gen_OBJECTS) $(srad_gen_LDADD) $(LIBS)
+kmsglog$(EXEEXT): $(kmsglog_OBJECTS) $(kmsglog_DEPENDENCIES) $(EXTRA_kmsglog_DEPENDENCIES) 
+	@rm -f kmsglog$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(kmsglog_OBJECTS) $(kmsglog_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -340,7 +314,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/srad_gen-srad_gen.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/kmsglog.Po@am__quote@ # am--include-marker
 
 $(am__depfiles_remade):
 	@$(MKDIR_P) $(@D)
@@ -361,20 +335,6 @@ am--depfiles: $(am__depfiles_remade)
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(COMPILE) -c -o $@ `$(CYGPATH_W) '$<'`
-
-srad_gen-srad_gen.o: srad_gen.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(srad_gen_CFLAGS) $(CFLAGS) -MT srad_gen-srad_gen.o -MD -MP -MF $(DEPDIR)/srad_gen-srad_gen.Tpo -c -o srad_gen-srad_gen.o `test -f 'srad_gen.c' || echo '$(srcdir)/'`srad_gen.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/srad_gen-srad_gen.Tpo $(DEPDIR)/srad_gen-srad_gen.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='srad_gen.c' object='srad_gen-srad_gen.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(srad_gen_CFLAGS) $(CFLAGS) -c -o srad_gen-srad_gen.o `test -f 'srad_gen.c' || echo '$(srcdir)/'`srad_gen.c
-
-srad_gen-srad_gen.obj: srad_gen.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(srad_gen_CFLAGS) $(CFLAGS) -MT srad_gen-srad_gen.obj -MD -MP -MF $(DEPDIR)/srad_gen-srad_gen.Tpo -c -o srad_gen-srad_gen.obj `if test -f 'srad_gen.c'; then $(CYGPATH_W) 'srad_gen.c'; else $(CYGPATH_W) '$(srcdir)/srad_gen.c'; fi`
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/srad_gen-srad_gen.Tpo $(DEPDIR)/srad_gen-srad_gen.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='srad_gen.c' object='srad_gen-srad_gen.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(srad_gen_CFLAGS) $(CFLAGS) -c -o srad_gen-srad_gen.obj `if test -f 'srad_gen.c'; then $(CYGPATH_W) 'srad_gen.c'; else $(CYGPATH_W) '$(srcdir)/srad_gen.c'; fi`
 
 ID: $(am__tagged_files)
 	$(am__define_uniq_tagged_files); mkid -fID $$unique
@@ -502,7 +462,7 @@ clean: clean-am
 clean-am: clean-generic clean-noinstPROGRAMS mostlyclean-am
 
 distclean: distclean-am
-		-rm -f ./$(DEPDIR)/srad_gen-srad_gen.Po
+		-rm -f ./$(DEPDIR)/kmsglog.Po
 	-rm -f Makefile
 distclean-am: clean-am distclean-compile distclean-generic \
 	distclean-tags
@@ -548,7 +508,7 @@ install-ps-am:
 installcheck-am:
 
 maintainer-clean: maintainer-clean-am
-		-rm -f ./$(DEPDIR)/srad_gen-srad_gen.Po
+		-rm -f ./$(DEPDIR)/kmsglog.Po
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic
 
@@ -583,8 +543,6 @@ uninstall-am:
 
 .PRECIOUS: Makefile
 
-.cu.o:
-	@NVCC_PATH@ -dc $(AM_CPPFLAGS) --maxrregcount 32 @NVCC_CPPFLAGS@ @NVCC_ARCHITECTURE@ $< -o $@
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

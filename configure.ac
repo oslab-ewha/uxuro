@@ -38,6 +38,8 @@ AC_CHECK_FUNCS([gettimeofday sqrt strchr])
 
 AC_CONFIG_FILES([Makefile
                  library/Makefile
+		 tools/Makefile
+		 tools/kmsglog/Makefile
                  examples/Makefile
                  examples/common/Makefile
 		 examples/BlackScholes/Makefile

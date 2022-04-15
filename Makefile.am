@@ -1,1 +1,1 @@
-SUBDIRS = library examples tests
+SUBDIRS = library tools examples tests
