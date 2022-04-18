@@ -2,12 +2,12 @@ import data
 
 
 class DataFaults(data.DataBase):
-    def __init__(self, path):
-        super().__init__(path)
+    def __init__(self, paths):
+        super().__init__(paths)
         self.rebase_min(0)
         self.rebase_min(1)
 
-    def _parse_row(self, row):
+    def _parse_row(self, fidx, row):
         fault_addr = int(row[1], 16)
         ts_fault = int(row[2])
         ftype = int(row[3])
