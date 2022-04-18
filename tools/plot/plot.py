@@ -20,7 +20,7 @@ class PlotBase:
 
         if self.args.o:
             print('saving figure:', self.args.o)
-            self.fig.savefig(args.o, dpi=500)
+            self.fig.savefig(self.args.o, dpi=500)
             plt.close(self.fig)
         else:
             plt.show()

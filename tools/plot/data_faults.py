@@ -1,41 +1,18 @@
-import csv
+import data
 
 
-class DataFaults:
+class DataFaults(data.DataBase):
     def __init__(self, path):
-        self.data = []
-        self._load(path)
+        super().__init__(path)
+        self.rebase_min(0)
+        self.rebase_min(1)
 
-    def _load(self, path):
-        try:
-            f = open(path, 'r')
-        except IOError:
-            return
-        reader = csv.reader(f, delimiter=',')
-
-        fault_addr_min = None
-        fault_addr_max = None
-        ts_min = None
-        ts_max = None
-
-        for row in reader:
-            fault_addr = int(row[1], 16)
-            ts = int(row[2])
-            ftype = int(row[3])
-            acctype = int(row[4])
-            if not fault_addr_min or fault_addr_min > fault_addr:
-                fault_addr_min = fault_addr
-            if not fault_addr_max or fault_addr_max < fault_addr:
-                fault_addr_max = fault_addr
-            if not ts_min or ts_min > ts:
-                ts_min = ts
-            if not ts_max or ts_max < ts:
-                ts_max = ts
-
-            self.data.append((ts, fault_addr, ftype, acctype))
-
-        for i in range(len(self.data)):
-            self.data[i] = (self.data[i][0] - ts_min, self.data[i][1] - fault_addr_min, self.data[i][2], self.data[i][3])
+    def _parse_row(self, row):
+        fault_addr = int(row[1], 16)
+        ts_fault = int(row[2])
+        ftype = int(row[3])
+        acctype = int(row[4])
+        return [ts_fault, fault_addr, ftype, acctype]
 
     def get_plot_data(self, **kwargs):
         timestamps = []
