@@ -2,16 +2,16 @@ import data
 
 
 class DataFaults(data.DataBase):
-    def __init__(self, paths):
-        super().__init__(paths)
+    def __init__(self, path):
+        super().__init__(path, 'f')
         self.rebase_min(0)
         self.rebase_min(1)
 
-    def _parse_row(self, fidx, row):
-        fault_addr = int(row[1], 16)
-        ts_fault = int(row[2])
-        ftype = int(row[3])
-        acctype = int(row[4])
+    def _parse_row(self, row):
+        fault_addr = int(row[2], 16)
+        ts_fault = int(row[3])
+        ftype = int(row[4])
+        acctype = int(row[5])
         return [ts_fault, fault_addr, ftype, acctype]
 
     def get_plot_data(self, **kwargs):

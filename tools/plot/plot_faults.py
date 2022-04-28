@@ -14,7 +14,7 @@ class PlotFaults(plot.PlotBase):
                                  help='fault category. all:rw+fault, rw:read/write fault, fault: fault type')
 
     def show(self):
-        data = data_faults.DataFaults(self.args.csv)
+        data = data_faults.DataFaults(self.args.csv[0])
 
         if self.args.c == 'all':
             xs, ys = data.get_plot_data(ftype=0, acctype=1)

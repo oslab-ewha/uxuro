@@ -2,15 +2,12 @@ import csv
 
 
 class DataBase:
-    def __init__(self, paths):
+    def __init__(self, path, head_ch=None):
         self.data = []
 
-        fidx = 0
-        for path in paths:
-            self._load(fidx, path)
-            fidx += 1
+        self._load(path, head_ch)
 
-    def _load(self, fidx, path):
+    def _load(self, path, head_ch):
         try:
             f = open(path, 'r')
         except IOError:
@@ -23,9 +20,13 @@ class DataBase:
         ts_max = None
 
         for row in self.reader:
-            self.data.append(self._parse_row(fidx, row))
+            if head_ch and row[0] != head_ch:
+                continue
+            row_parsed = self._parse_row(row)
+            if row_parsed:
+                self.data.append(row_parsed)
 
-    def _parse_row(self, fidx, row):
+    def _parse_row(self, row):
         pass
 
     def rebase_min(self, idx):

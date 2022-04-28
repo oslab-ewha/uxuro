@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 class PlotBase:
     def __init__(self):
         self.parser = argparse.ArgumentParser()
-        self.parser.add_argument('csv', nargs="+", type=str, help='path of kernel message file')
+        self.parser.add_argument('csv', nargs=1, type=str, help='output file of kmsglog')
         self.parser.add_argument('--points', action='store_true', help='plot with points')
         self.parser.add_argument('-o', type=str, default="", help='output filename')
         self.parser.set_defaults(points=False)

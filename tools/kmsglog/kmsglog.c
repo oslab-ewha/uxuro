@@ -11,7 +11,7 @@
 #define BUF_SIZE	16384
 
 static int	finished = 0;
-static FILE	*fp_f, *fp_e;
+static FILE	*fp_output;
 
 static void
 sighandler(int signum, siginfo_t *info, void *ptr)
@@ -57,7 +57,6 @@ process_kmsg(char *buf)
 {
 	char	*semi;
 	unsigned long long	ts;
-	FILE	*fp_out = NULL;
 
 	semi = strchr(buf, ';');
 	if (semi == NULL)
@@ -69,18 +68,14 @@ process_kmsg(char *buf)
 		return;
 	if (strncmp(semi + 1, "uXuA", 4) != 0)
 		return;
-	if (semi[5] == 'f')
-		fp_out = fp_f;
-	else if (semi[5] == 'e')
-		fp_out = fp_e;
-	else
+	if (semi[5] != 'f' && semi[5] != 'e')
 		return;
 	if (semi[6] != ':')
 		return;
-	if (fp_out == NULL)
-		printf("%llx,%s\n", ts, semi + 7);
+	if (fp_output == NULL)
+		printf("%c,%llx,%s\n", semi[5], ts, semi + 7);
 	else
-		fprintf(fp_out, "%llx,%s\n", ts, semi + 7);
+		fprintf(fp_output, "%c,%llx,%s\n", semi[5], ts, semi + 7);
 }
 
 static void
@@ -140,18 +135,9 @@ main(int argc, char *argv[])
 	lseek(fd, 0, SEEK_END);
 
 	if (argc > 1) {
-		char	fpath[256];
-
-		snprintf(fpath, 256, "%s.f.txt", argv[1]);
-		fp_f = fopen(fpath, "w");
-		if (fp_f == NULL) {
-			fprintf(stderr, "failed to create: %s\n", fpath);
-			exit(1);
-		}
-		snprintf(fpath, 256, "%s.e.txt", argv[1]);
-		fp_e = fopen(fpath, "w");
-		if (fp_e == NULL) {
-			fprintf(stderr, "failed to create: %s\n", fpath);
+		fp_output = fopen(argv[1], "w");
+		if (fp_output == NULL) {
+			fprintf(stderr, "failed to create: %s\n", argv[1]);
 			exit(1);
 		}
 	}
@@ -161,9 +147,7 @@ main(int argc, char *argv[])
 	dump_kmsg(fd);
 
 	close(fd);
-	if (fp_f)
-		fclose(fp_f);
-	if (fp_e)
-		fclose(fp_e);
+	if (fp_output)
+		fclose(fp_output);
 	return 0;
 }

@@ -11,7 +11,7 @@ class PlotEvictFaults(plot.PlotBase):
         super().__init__()
 
     def show(self):
-        data = data_evict_faults.DataEvictFaults(self.args.csv)
+        data = data_evict_faults.DataEvictFaults(self.args.csv[0])
 
         xs_f, ys_f = data.get_plot_data(False)
         marker = 'x' if self.marker == '.' else ','

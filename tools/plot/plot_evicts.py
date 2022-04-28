@@ -10,7 +10,7 @@ class PlotEvicts(plot.PlotBase):
         super().__init__()
 
     def show(self):
-        data = data_evicts.DataEvicts(self.args.csv)
+        data = data_evicts.DataEvicts(self.args.csv[0])
 
         xs, ys = data.get_plot_data(0, 1)
         plt.plot(xs, ys, marker=self.marker, ls='')
