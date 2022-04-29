@@ -14,14 +14,10 @@ class DataBase:
             return
         self.reader = csv.reader(f, delimiter=',')
 
-        evict_addr_min = None
-        evict_addr_max = None
-        ts_min = None
-        ts_max = None
-
         for row in self.reader:
             if head_ch and row[0] != head_ch:
                 continue
+            row[1] = int(row[1], 16) / 1000.0
             row_parsed = self._parse_row(row)
             if row_parsed:
                 self.data.append(row_parsed)
@@ -37,6 +33,17 @@ class DataBase:
                 minval = d[idx]
         for i in range(len(self.data)):
             self.data[i][idx] = self.data[i][idx] - minval
+
+    def get_data_range(self, idx):
+        minval = None
+        maxval = None
+
+        for d in self.data:
+            if not minval or minval > d[idx]:
+                minval = d[idx]
+            if not maxval or maxval < d[idx]:
+                maxval = d[idx]
+        return minval, maxval
 
     def get_plot_data(self, idx_x, idx_y):
         xs = []

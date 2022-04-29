@@ -9,5 +9,5 @@ class DataEvicts(data.DataBase):
 
     def _parse_row(self, row):
         evict_addr = int(row[2], 16)
-        ts = int(row[1], 16)
+        ts = row[1]
         return [ts, evict_addr]

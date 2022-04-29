@@ -2220,6 +2220,8 @@ void uvm_gpu_service_replayable_faults(uvm_gpu_t *gpu)
             ++num_throttled;
 
         ++num_batches;
+        printk("uXuAb:%u,%u,%u,%u\n", batch_context->num_cached_faults, batch_context->num_coalesced_faults,
+               batch_context->num_duplicate_faults, batch_context->num_invalid_prefetch_faults);
     }
 
     if (status == NV_WARN_MORE_PROCESSING_REQUIRED)

@@ -8,7 +8,7 @@ class DataEvictFaults(data.DataBase):
         self.rebase_min(1)
 
     def _parse_row(self, row):
-        ts = int(row[1], 16)
+        ts = row[1]
         if row[0] == 'f':
             fault_addr = int(row[2], 16)
             return [ts, fault_addr, False]

@@ -68,7 +68,7 @@ process_kmsg(char *buf)
 		return;
 	if (strncmp(semi + 1, "uXuA", 4) != 0)
 		return;
-	if (semi[5] != 'f' && semi[5] != 'e')
+	if (semi[5] != 'f' && semi[5] != 'e' && semi[5] != 'b')
 		return;
 	if (semi[6] != ':')
 		return;
