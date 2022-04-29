@@ -257,6 +257,8 @@ typedef struct
 
     // Convenience buffer for page mask prints
     char page_mask_string_buffer[UVM_PAGE_MASK_PRINT_MIN_BUFFER_SIZE];
+
+    NvU32 n_gpu_fetches, n_gpu_prefetches, n_cpu_fetches, n_cpu_prefetches;
 } uvm_va_block_context_t;
 
 typedef enum

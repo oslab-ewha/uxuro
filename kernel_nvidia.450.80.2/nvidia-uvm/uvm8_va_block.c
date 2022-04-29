@@ -2297,6 +2297,28 @@ static uvm_va_block_region_t block_phys_contig_region(uvm_va_block_t *block,
     }
 }
 
+static void
+stat_migration(uvm_va_block_context_t *block_context, uvm_processor_id_t dst_id,
+               uvm_va_block_region_t region, const uvm_page_mask_t *prefetch_page_mask)
+{
+    uvm_page_index_t page_index;
+
+    for_each_va_block_page_in_region_mask(page_index, NULL, region) {
+        if (UVM_ID_IS_CPU(dst_id)) {
+            if (prefetch_page_mask && uvm_page_mask_test(prefetch_page_mask, page_index))
+                block_context->n_cpu_prefetches++;
+            else
+                block_context->n_cpu_fetches++;
+		}
+        else {
+            if (prefetch_page_mask && uvm_page_mask_test(prefetch_page_mask, page_index))
+                block_context->n_gpu_prefetches++;
+            else
+                block_context->n_gpu_fetches++;
+        }
+    }
+}
+
 // Copies pages resident on the src_id processor to the dst_id processor
 //
 // The function adds the pages that were successfully copied to the output
@@ -2488,7 +2510,7 @@ static NV_STATUS block_copy_resident_pages_between(uvm_va_block_t *block,
                                             block_transfer_mode,
                                             contig_cause,
                                             &block_context->make_resident);
-
+            stat_migration(block_context, dst_id, contig_region, prefetch_page_mask);
             contig_start_index = page_index;
             contig_cause = page_cause;
         }
@@ -2552,6 +2574,7 @@ static NV_STATUS block_copy_resident_pages_between(uvm_va_block_t *block,
                                         block_transfer_mode,
                                         contig_cause,
                                         &block_context->make_resident);
+        stat_migration(block_context, dst_id, contig_region, prefetch_page_mask);
 
         // TODO: Bug 1766424: If the destination is a GPU and the copy was done
         //       by that GPU, use a GPU-local membar if no peer can currently

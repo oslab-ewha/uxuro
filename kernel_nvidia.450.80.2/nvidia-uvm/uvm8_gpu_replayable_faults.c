@@ -1453,9 +1453,6 @@ static NV_STATUS service_fault_batch(uvm_gpu_t *gpu,
 
         UVM_ASSERT(current_entry->va_space);
 
-	printk("uXuAf:%llx,%llu,%d,%d\n", current_entry->fault_address, current_entry->timestamp,
-	       current_entry->fault_type, current_entry->fault_access_type);
-
         if (current_entry->va_space != va_space) {
             // Fault on a different va_space, drop the lock of the old one...
             if (va_space != NULL) {
@@ -1529,6 +1526,12 @@ static NV_STATUS service_fault_batch(uvm_gpu_t *gpu,
         //       don't do an unconditional VA range lookup for every ATS fault.
         status = uvm_va_block_find_create(current_entry->va_space, current_entry->fault_address, &va_block);
         if (status == NV_OK) {
+            uvm_va_block_context_t *block_context = &gpu->parent->fault_buffer_info.replayable.block_service_context.block_context;
+
+            block_context->n_cpu_fetches = 0;
+            block_context->n_cpu_prefetches = 0;
+            block_context->n_gpu_fetches = 0;
+            block_context->n_gpu_prefetches = 0;
             status = service_batch_managed_faults_in_block(gpu_va_space->gpu,
                                                            mm,
                                                            va_block,
@@ -1540,6 +1543,11 @@ static NV_STATUS service_fault_batch(uvm_gpu_t *gpu,
             // something really bad happened
             if (status != NV_OK)
                 goto fail;
+
+            printk("uXuAf:%llx,%llu,%d,%d,%llx,%x,%x,%x,%x\n", current_entry->fault_address, current_entry->timestamp,
+                   current_entry->fault_type, current_entry->fault_access_type, va_block->start,
+                   block_context->n_cpu_fetches, block_context->n_cpu_prefetches,
+                   block_context->n_gpu_fetches, block_context->n_gpu_prefetches);
 
             i += block_faults;
         }

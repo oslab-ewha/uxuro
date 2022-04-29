@@ -495,6 +495,7 @@ static vm_fault_t uvm_vm_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
     bool tools_enabled;
     bool major_fault = false;
     uvm_service_block_context_t *service_context;
+    uvm_va_block_context_t *block_context;
     uvm_global_processor_mask_t gpus_to_check_for_ecc;
 
     if (status != NV_OK)
@@ -521,6 +522,12 @@ static vm_fault_t uvm_vm_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
     }
 
     service_context->cpu_fault.wakeup_time_stamp = 0;
+
+    block_context = &service_context->block_context;
+    block_context->n_cpu_fetches = 0;
+    block_context->n_cpu_prefetches = 0;
+    block_context->n_gpu_fetches = 0;
+    block_context->n_gpu_prefetches = 0;
 
     // The mmap_lock might be held in write mode, but the mode doesn't matter
     // for the purpose of lock ordering and we don't rely on it being in write
@@ -585,6 +592,11 @@ static vm_fault_t uvm_vm_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
                                          &gpus_to_check_for_ecc,
                                          &service_context->cpu_fault.gpus_to_check_for_ecc);
         uvm_global_mask_retain(&gpus_to_check_for_ecc);
+
+	printk("uXuAf:%llx,0,100,%d,%llx,%x,%x,%x,%x\n", fault_addr,
+	       is_write ? 2: 1, va_block->start,
+	       block_context->n_cpu_fetches, block_context->n_cpu_prefetches,
+	       block_context->n_gpu_fetches, block_context->n_gpu_prefetches);
     }
 
     uvm_va_space_up_read(va_space);
