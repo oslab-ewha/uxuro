@@ -17,6 +17,7 @@ usage(void)
 "  -l <loop count>: tail GPU loop(default: 1)\n"
 "  -a <device no>: cudaMemAdviseSetAccessedBy(cpu or 0, 1, ...)\n"
 "  -p <sched type>: cudaMemAdviseSetPreferredLocation(cpu or 0, 1, ...)\n"
+"  -R: cudaMemAdviseSetReadMostly\n"
 "  -h: help\n");
 }
 
@@ -27,7 +28,8 @@ static unsigned n_tbs = 1;
 static unsigned n_loops_tail = 1;
 static int	accessedBy = -1;
 static int	preferredLoc = -1;
-static int	quiet = 0;
+static int	readMostly;
+static int	quiet;
 
 static __global__ void
 zeroing(unsigned char *mem, unsigned iosize, unsigned iostride)
@@ -124,7 +126,7 @@ parse_args(int argc, char *argv[])
 {
 	int	c;
 
-	while ((c = getopt(argc, argv, "b:t:s:S:a:p:l:hq")) != -1) {
+	while ((c = getopt(argc, argv, "b:t:s:S:a:p:Rl:hq")) != -1) {
 		switch (c) {
 		case 'b':
 			n_tbs = parse_count(optarg, "TB");
@@ -143,6 +145,9 @@ parse_args(int argc, char *argv[])
 			break;
 		case 'p':
 			preferredLoc = parse_procid(optarg);
+			break;
+		case 'R':
+			readMostly = 1;
 			break;
 		case 'l':
 			n_loops_tail = parse_count(optarg, "n_tail_loops");
@@ -211,6 +216,8 @@ main(int argc, char *argv[])
 		CUDA_CHECK(cudaMemAdvise(mem, size, cudaMemAdviseSetAccessedBy, accessedBy), "cudaMemAdvise/AccessedBy");  // set direct access hint
 	if (preferredLoc >= 0)
 		CUDA_CHECK(cudaMemAdvise(mem, size, cudaMemAdviseSetPreferredLocation, preferredLoc), "cudaMemAdvise/PreferredLocation");
+	if (readMostly)
+		CUDA_CHECK(cudaMemAdvise(mem, size, cudaMemAdviseSetReadMostly, 0), "cudaMemAdvise/ReadMostly");
 
 	zeroing_by_gpu(mem);
 	for (i = 0; i < n_loops_tail; i++) {
