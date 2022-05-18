@@ -5575,7 +5575,7 @@ fi
 done
 
 
-ac_config_files="$ac_config_files Makefile library/Makefile tools/Makefile tools/kmsglog/Makefile examples/Makefile examples/common/Makefile examples/BlackScholes/Makefile examples/backprop/Makefile examples/binomialOptions/Makefile examples/hotspot/Makefile examples/lavaMD/Makefile examples/pathfinder/Makefile examples/srad_v2/Makefile examples/vectorAdd/Makefile tests/Makefile tests/sanity-basic/Makefile tests/unit-test/Makefile"
+ac_config_files="$ac_config_files Makefile library/Makefile tools/Makefile tools/kmsglog/Makefile examples/Makefile examples/common/Makefile examples/BlackScholes/Makefile examples/backprop/Makefile examples/binomialOptions/Makefile examples/hotspot/Makefile examples/lavaMD/Makefile examples/pathfinder/Makefile examples/srad_v2/Makefile examples/vectorAdd/Makefile benchmarks/Makefile benchmarks/micro/Makefile tests/Makefile tests/sanity-basic/Makefile tests/unit-test/Makefile"
 
 
 cat >confcache <<\_ACEOF
@@ -6339,6 +6339,8 @@ do
     "examples/pathfinder/Makefile") CONFIG_FILES="$CONFIG_FILES examples/pathfinder/Makefile" ;;
     "examples/srad_v2/Makefile") CONFIG_FILES="$CONFIG_FILES examples/srad_v2/Makefile" ;;
     "examples/vectorAdd/Makefile") CONFIG_FILES="$CONFIG_FILES examples/vectorAdd/Makefile" ;;
+    "benchmarks/Makefile") CONFIG_FILES="$CONFIG_FILES benchmarks/Makefile" ;;
+    "benchmarks/micro/Makefile") CONFIG_FILES="$CONFIG_FILES benchmarks/micro/Makefile" ;;
     "tests/Makefile") CONFIG_FILES="$CONFIG_FILES tests/Makefile" ;;
     "tests/sanity-basic/Makefile") CONFIG_FILES="$CONFIG_FILES tests/sanity-basic/Makefile" ;;
     "tests/unit-test/Makefile") CONFIG_FILES="$CONFIG_FILES tests/unit-test/Makefile" ;;

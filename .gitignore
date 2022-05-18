@@ -26,6 +26,7 @@ Makefile
 /config.h
 /config.log
 /config.status
+/benchmarks/micro/mb_advise
 /examples/Makefile
 /examples/BlackScholes/BlackScholes
 /examples/backprop/backprop
