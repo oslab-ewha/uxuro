@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "benchmark.h"
+#include "timer.h"
 
 static void
 usage(void)
@@ -197,7 +198,7 @@ main(int argc, char *argv[])
 {
 	unsigned char	*mem;
 	unsigned long	size;
-	unsigned	i;
+	unsigned	ticks, i;
 
 	parse_args(argc, argv);
 
@@ -220,12 +221,16 @@ main(int argc, char *argv[])
 		CUDA_CHECK(cudaMemAdvise(mem, size, cudaMemAdviseSetReadMostly, 0), "cudaMemAdvise/ReadMostly");
 
 	zeroing_by_gpu(mem);
+
+	init_tickcount();
 	for (i = 0; i < n_loops_tail; i++) {
 		zeroing_by_cpu(mem);
 		zeroing_by_gpu(mem);
 	}
+	ticks = get_tickcount();
 
 	cudaFree(mem);
 
+	printf("elapsed: %.3f\n", ticks / 1000.0);
 	return 0;
 }
