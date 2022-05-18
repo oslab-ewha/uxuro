@@ -42,6 +42,7 @@ zeroing(unsigned char *mem, unsigned iosize, unsigned iostride)
 			mem[idx + i] = 0;
 	}
 	else {
+		idx /= sizeof(int);
 		for (i = 0; i < iosize / sizeof(int); i++)
 			((int *)mem)[idx + i] = 0;
 	}
@@ -67,6 +68,7 @@ zeroing_by_cpu(unsigned char *mem)
 					mem[idx + k] = 0;
 			}
 			else {
+				idx /= sizeof(int);
 				for (k = 0; k < iosize / sizeof(int); k++)
 					((int *)mem)[idx + k] = 0;
 			}
@@ -84,7 +86,7 @@ parse_count(const char *arg, const char *name)
 }
 
 static int
-parse_size(const char *arg)
+parse_size(const char *arg, const char *name)
 {
 	unsigned	size;
 	char	unit;
@@ -96,9 +98,11 @@ parse_size(const char *arg)
 			size *= 1024 * 1024;
 		else if (unit == 'g')
 			size *= 1024 * 1024 * 1024;
+		else
+			ERROR("invalid size unit");
 	}
 	if (size == 0)
-		ERROR("0 IO stride is not allowed");
+		ERROR("0 %s is not allowed", name);
 	return size;
 }
 
@@ -129,10 +133,10 @@ parse_args(int argc, char *argv[])
 			n_threads = parse_count(optarg, "n_threads");
 			break;
 		case 's':
-			iosize = parse_count(optarg, "io size");
+			iosize = parse_size(optarg, "IO size");
 			break;
 		case 'S':
-			iostride = parse_size(optarg);
+			iostride = parse_size(optarg, "IO stride");
 			break;
 		case 'a':
 			accessedBy = parse_procid(optarg);
@@ -209,9 +213,10 @@ main(int argc, char *argv[])
 		CUDA_CHECK(cudaMemAdvise(mem, size, cudaMemAdviseSetPreferredLocation, preferredLoc), "cudaMemAdvise/PreferredLocation");
 
 	zeroing_by_gpu(mem);
-	zeroing_by_cpu(mem);
-	for (i = 0; i < n_loops_tail; i++)
+	for (i = 0; i < n_loops_tail; i++) {
+		zeroing_by_cpu(mem);
 		zeroing_by_gpu(mem);
+	}
 
 	cudaFree(mem);
 

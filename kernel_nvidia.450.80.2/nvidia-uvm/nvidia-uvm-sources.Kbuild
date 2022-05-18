@@ -102,3 +102,4 @@ NVIDIA_UVM_SOURCES += nvidia-uvm/uvm8_peer_identity_mappings_test.c
 NVIDIA_UVM_SOURCES += nvidia-uvm/uvm8_va_block_test.c
 NVIDIA_UVM_SOURCES += nvidia-uvm/uvm8_range_group_tree_test.c
 NVIDIA_UVM_SOURCES += nvidia-uvm/uvm8_thread_context_test.c
+NVIDIA_UVM_SOURCES += nvidia-uvm/uvm_uxu_anal.c

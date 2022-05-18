@@ -35,6 +35,7 @@
 #include "uvm_linux_ioctl.h"
 #include "uvm8_hmm.h"
 #include "uvm8_mem.h"
+#include "uvm_uxu_anal.h"
 
 #define NVIDIA_UVM_DEVICE_NAME          "nvidia-uvm"
 
@@ -593,10 +594,10 @@ static vm_fault_t uvm_vm_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
                                          &service_context->cpu_fault.gpus_to_check_for_ecc);
         uvm_global_mask_retain(&gpus_to_check_for_ecc);
 
-	printk("uXuAf:%llx,0,100,%d,%llx,%x,%x,%x,%x\n", fault_addr,
-	       is_write ? 2: 1, va_block->start,
-	       block_context->n_cpu_fetches, block_context->n_cpu_prefetches,
-	       block_context->n_gpu_fetches, block_context->n_gpu_prefetches);
+	uXuA_printk('f', "%llx,0,100,%d,%llx,%x,%x,%x,%x", fault_addr,
+		    is_write ? 2: 1, va_block->start,
+		    block_context->n_cpu_fetches, block_context->n_cpu_prefetches,
+		    block_context->n_gpu_fetches, block_context->n_gpu_prefetches);
     }
 
     uvm_va_space_up_read(va_space);

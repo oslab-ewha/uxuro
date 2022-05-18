@@ -39,6 +39,7 @@
 #include "uvm8_ats_ibm.h"
 #include "uvm8_ats_faults.h"
 #include "uvm8_test.h"
+#include "uvm_uxu_anal.h"
 
 // TODO: Bug 1881601: [uvm] Add fault handling overview for replayable and
 // non-replayable faults
@@ -1544,10 +1545,10 @@ static NV_STATUS service_fault_batch(uvm_gpu_t *gpu,
             if (status != NV_OK)
                 goto fail;
 
-            printk("uXuAf:%llx,%llu,%d,%d,%llx,%x,%x,%x,%x\n", current_entry->fault_address, current_entry->timestamp,
-                   current_entry->fault_type, current_entry->fault_access_type, va_block->start,
-                   block_context->n_cpu_fetches, block_context->n_cpu_prefetches,
-                   block_context->n_gpu_fetches, block_context->n_gpu_prefetches);
+            uXuA_printk('f', "%llx,%llu,%d,%d,%llx,%x,%x,%x,%x", current_entry->fault_address, current_entry->timestamp,
+			current_entry->fault_type, current_entry->fault_access_type, va_block->start,
+			block_context->n_cpu_fetches, block_context->n_cpu_prefetches,
+			block_context->n_gpu_fetches, block_context->n_gpu_prefetches);
 
             i += block_faults;
         }
@@ -2220,8 +2221,8 @@ void uvm_gpu_service_replayable_faults(uvm_gpu_t *gpu)
             ++num_throttled;
 
         ++num_batches;
-        printk("uXuAb:%u,%u,%u,%u\n", batch_context->num_cached_faults, batch_context->num_coalesced_faults,
-               batch_context->num_duplicate_faults, batch_context->num_invalid_prefetch_faults);
+        uXuA_printk('b', "%u,%u,%u,%u", batch_context->num_cached_faults, batch_context->num_coalesced_faults,
+		    batch_context->num_duplicate_faults, batch_context->num_invalid_prefetch_faults);
     }
 
     if (status == NV_WARN_MORE_PROCESSING_REQUIRED)

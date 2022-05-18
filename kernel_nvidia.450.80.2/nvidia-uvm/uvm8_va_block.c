@@ -38,6 +38,7 @@
 #include "uvm8_mem.h"
 #include "uvm8_gpu_access_counters.h"
 #include "uvm8_test_ioctl.h"
+#include "uvm_uxu_anal.h"
 
 typedef enum
 {
@@ -10423,7 +10424,7 @@ NV_STATUS uvm_va_block_evict_chunks(uvm_va_block_t *va_block,
     // Only move pages resident on the GPU
     uvm_page_mask_and(pages_to_evict, pages_to_evict, uvm_va_block_resident_mask_get(va_block, gpu->id));
 
-    printk("uXuAe:%llx,%u\n", va_block->start, uvm_page_mask_weight(pages_to_evict));
+    uXuA_printk('e', "%llx,%u", va_block->start, uvm_page_mask_weight(pages_to_evict));
 
     // TODO: Bug 1765193: make_resident() breaks read-duplication, but it's not
     // necessary to do so for eviction. Add a version that unmaps only the
