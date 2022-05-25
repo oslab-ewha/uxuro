@@ -81,11 +81,13 @@ zeroing_by_cpu(unsigned char *mem)
 static int
 parse_count(const char *arg, const char *name)
 {
-	if (sscanf(optarg, "%u", &n_threads) != 1)
+	unsigned	count;
+
+	if (sscanf(optarg, "%u", &count) != 1)
 		ERROR("invalid number of %s: %s", arg, name);
-	if (n_threads == 0)
+	if (count == 0)
 		ERROR("0 %s not allowed", name);
-	return n_threads;
+	return count;
 }
 
 static int
