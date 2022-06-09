@@ -16,6 +16,7 @@ usage(void)
 "  -s <IO size>: read/write size in byte per thread\n"
 "  -S <IO stride>: memory access stride per thread(default: 4k)\n"
 "  -l <loop count>: tail GPU loop(default: 1)\n"
+"  -M: summing instead of zeroing(do read operation)\n"
 "  -a <device no>: cudaMemAdviseSetAccessedBy(cpu or 0, 1, ...)\n"
 "  -p <sched type>: cudaMemAdviseSetPreferredLocation(cpu or 0, 1, ...)\n"
 "  -R: cudaMemAdviseSetReadMostly\n"
@@ -27,10 +28,16 @@ static unsigned iosize = 1;
 static unsigned iostride = 4096;
 static unsigned n_tbs = 1;
 static unsigned n_loops_tail = 1;
+static int	do_summing = 0;
 static int	accessedBy = -1;
 static int	preferredLoc = -1;
 static int	readMostly;
 static int	quiet;
+
+static __device__ unsigned	sum_by_gpu;
+
+/* The summed value has no meaning, which is just for disabling optimization. */
+static unsigned	sum_by_cpu;
 
 static __global__ void
 zeroing(unsigned char *mem, unsigned iosize, unsigned iostride)
@@ -51,6 +58,27 @@ zeroing(unsigned char *mem, unsigned iosize, unsigned iostride)
 	}
 }
 
+static __global__ void
+summing(unsigned char *mem, unsigned iosize, unsigned iostride)
+{
+	unsigned long	idx;
+	unsigned	sum = 0;
+	unsigned	i;
+
+	idx = (blockIdx.x * blockDim.x + threadIdx.x) * iostride;
+
+	if (iosize < sizeof(int)) {
+		for (i = 0; i < iosize; i++)
+			sum += mem[idx + i];
+	}
+	else {
+		idx /= sizeof(int);
+		for (i = 0; i < iosize / sizeof(int); i++)
+			sum += ((int *)mem)[idx + i];
+	}
+	sum_by_gpu = sum;
+}
+
 static void
 zeroing_by_gpu(unsigned char *mem)
 {
@@ -59,11 +87,18 @@ zeroing_by_gpu(unsigned char *mem)
 }
 
 static void
+summing_by_gpu(unsigned char *mem)
+{
+	summing<<<n_tbs, n_threads>>>(mem, iosize, iostride);
+	cudaDeviceSynchronize();
+}
+
+static void
 zeroing_by_cpu(unsigned char *mem)
 {
 	unsigned	i, j, k;
 
-	for (i = 0; i < n_tbs; i++)
+	for (i = 0; i < n_tbs; i++) {
 		for (j = 0; j < n_threads; j++) {
 			unsigned long	idx = (unsigned long)(i * n_threads + j) * iostride;
 			if (iosize < sizeof(int)) {
@@ -76,6 +111,28 @@ zeroing_by_cpu(unsigned char *mem)
 					((int *)mem)[idx + k] = 0;
 			}
 		}
+	}
+}
+
+static void
+summing_by_cpu(unsigned char *mem)
+{
+	unsigned	i, j, k;
+
+	for (i = 0; i < n_tbs; i++) {
+		for (j = 0; j < n_threads; j++) {
+			unsigned long	idx = (unsigned long)(i * n_threads + j) * iostride;
+			if (iosize < sizeof(int)) {
+				for (k = 0; k < iosize; k++)
+					sum_by_cpu += mem[idx + k];
+			}
+			else {
+				idx /= sizeof(int);
+				for (k = 0; k < iosize / sizeof(int); k++)
+					sum_by_cpu += ((int *)mem)[idx + k];
+			}
+		}
+	}
 }
 
 static int
@@ -129,7 +186,7 @@ parse_args(int argc, char *argv[])
 {
 	int	c;
 
-	while ((c = getopt(argc, argv, "b:t:s:S:a:p:Rl:hq")) != -1) {
+	while ((c = getopt(argc, argv, "b:t:s:S:Ma:p:Rl:hq")) != -1) {
 		switch (c) {
 		case 'b':
 			n_tbs = parse_count(optarg, "TB");
@@ -142,6 +199,9 @@ parse_args(int argc, char *argv[])
 			break;
 		case 'S':
 			iostride = parse_size(optarg, "IO stride");
+			break;
+		case 'M':
+			do_summing = 1;
 			break;
 		case 'a':
 			accessedBy = parse_procid(optarg);
@@ -226,11 +286,21 @@ main(int argc, char *argv[])
 
 	init_tickcount();
 	for (i = 0; i < n_loops_tail; i++) {
-		zeroing_by_cpu(mem);
-		zeroing_by_gpu(mem);
+		if (!do_summing) {
+			zeroing_by_cpu(mem);
+			zeroing_by_gpu(mem);
+		}
+		else {
+			summing_by_cpu(mem);
+			summing_by_gpu(mem);
+		}
 	}
 	ticks = get_tickcount();
 
+	{
+		unsigned	data;
+		CUDA_CHECK(cudaMemcpyFromSymbol(&data, sum_by_gpu, sizeof(unsigned)), "cudaMemcpyFromSymbol");
+	}
 	cudaFree(mem);
 
 	printf("elapsed: %.3f\n", ticks / 1000.0);
