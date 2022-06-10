@@ -28,6 +28,7 @@ Makefile
 /config.status
 /benchmarks/micro/mb_advise
 /benchmarks/micro/mb_relay
+/benchmarks/micro/mb_copy
 /examples/Makefile
 /examples/BlackScholes/BlackScholes
 /examples/backprop/backprop
