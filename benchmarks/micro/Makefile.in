@@ -86,7 +86,7 @@ POST_INSTALL = :
 NORMAL_UNINSTALL = :
 PRE_UNINSTALL = :
 POST_UNINSTALL = :
-noinst_PROGRAMS = mb_advise$(EXEEXT)
+noinst_PROGRAMS = mb_advise$(EXEEXT) mb_relay$(EXEEXT)
 subdir = benchmarks/micro
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/cuda.m4 \
@@ -99,9 +99,14 @@ CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 PROGRAMS = $(noinst_PROGRAMS)
-am_mb_advise_OBJECTS = mb_advise.$(OBJEXT)
+am_mb_advise_OBJECTS = mb_advise.$(OBJEXT) mb_common.$(OBJEXT)
 mb_advise_OBJECTS = $(am_mb_advise_OBJECTS)
+mb_advise_LDADD = $(LDADD)
 mb_advise_DEPENDENCIES = $(top_srcdir)/examples/common/libutil.a
+am_mb_relay_OBJECTS = mb_relay.$(OBJEXT) mb_common.$(OBJEXT)
+mb_relay_OBJECTS = $(am_mb_relay_OBJECTS)
+mb_relay_LDADD = $(LDADD)
+mb_relay_DEPENDENCIES = $(top_srcdir)/examples/common/libutil.a
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -122,13 +127,12 @@ am__v_CC_ = $(am__v_CC_@AM_DEFAULT_V@)
 am__v_CC_0 = @echo "  CC      " $@;
 am__v_CC_1 = 
 CCLD = $(CC)
-LINK = $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
 AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(mb_advise_SOURCES)
-DIST_SOURCES = $(mb_advise_SOURCES)
+SOURCES = $(mb_advise_SOURCES) $(mb_relay_SOURCES)
+DIST_SOURCES = $(mb_advise_SOURCES) $(mb_relay_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -262,9 +266,10 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 CLEANFILES = *~
 DISTCLEANFILES = *~
-mb_advise_SOURCES = mb_advise.cu ../benchmark.h
-mb_advise_LDADD = $(top_srcdir)/examples/common/libutil.a
-mb_advise_LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
+mb_advise_SOURCES = mb_advise.cu mb_common.cu ../benchmark.h
+mb_relay_SOURCES = mb_relay.cu mb_common.cu ../benchmark.h
+LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
+LDADD = $(top_srcdir)/examples/common/libutil.a -lcuda
 AM_CPPFLAGS = -I.. -I$(top_srcdir)/examples/common
 all: all-am
 
@@ -306,7 +311,11 @@ clean-noinstPROGRAMS:
 
 mb_advise$(EXEEXT): $(mb_advise_OBJECTS) $(mb_advise_DEPENDENCIES) $(EXTRA_mb_advise_DEPENDENCIES) 
 	@rm -f mb_advise$(EXEEXT)
-	$(AM_V_GEN)$(mb_advise_LINK) $(mb_advise_OBJECTS) $(mb_advise_LDADD) $(LIBS)
+	$(AM_V_CCLD)$(LINK) $(mb_advise_OBJECTS) $(mb_advise_LDADD) $(LIBS)
+
+mb_relay$(EXEEXT): $(mb_relay_OBJECTS) $(mb_relay_DEPENDENCIES) $(EXTRA_mb_relay_DEPENDENCIES) 
+	@rm -f mb_relay$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(mb_relay_OBJECTS) $(mb_relay_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -520,7 +529,7 @@ uninstall-am:
 .PRECIOUS: Makefile
 
 
-mb_advise.o: ../benchmark.h
+mb_advise.o mb_relay.o: ../benchmark.h
 .cu.o:
 	@NVCC_PATH@ -dc $(AM_CPPFLAGS) --maxrregcount 32 @NVCC_CPPFLAGS@ @NVCC_ARCHITECTURE@ $< -o $@
 

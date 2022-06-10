@@ -2,8 +2,7 @@
 #include <unistd.h>
 #include <string.h>
 
-#include "benchmark.h"
-#include "timer.h"
+#include "mb_common.h"
 
 static void
 usage(void)
@@ -135,52 +134,6 @@ summing_by_cpu(unsigned char *mem)
 	}
 }
 
-static int
-parse_count(const char *arg, const char *name)
-{
-	unsigned	count;
-
-	if (sscanf(optarg, "%u", &count) != 1)
-		ERROR("invalid number of %s: %s", arg, name);
-	if (count == 0)
-		ERROR("0 %s not allowed", name);
-	return count;
-}
-
-static int
-parse_size(const char *arg, const char *name)
-{
-	unsigned	size;
-	char	unit;
-
-	if (sscanf(optarg, "%u%c", &size, &unit) == 2) {
-		if (unit == 'k')
-			size *= 1024;
-		else if (unit == 'm')
-			size *= 1024 * 1024;
-		else if (unit == 'g')
-			size *= 1024 * 1024 * 1024;
-		else
-			ERROR("invalid size unit");
-	}
-	if (size == 0)
-		ERROR("0 %s is not allowed", name);
-	return size;
-}
-
-static int
-parse_procid(const char *arg)
-{
-	unsigned	gpuid;
-
-	if (strcmp(arg, "cpu") == 0)
-		return cudaCpuDeviceId;
-
-	if (sscanf(arg, "%u", &gpuid) != 1)
-		ERROR("invalid argument: %s\n", arg);
-	return gpuid;
-}
-
 static void
 parse_args(int argc, char *argv[])
 {
@@ -189,31 +142,31 @@ parse_args(int argc, char *argv[])
 	while ((c = getopt(argc, argv, "b:t:s:S:Ma:p:Rl:hq")) != -1) {
 		switch (c) {
 		case 'b':
-			n_tbs = parse_count(optarg, "TB");
+			n_tbs = mb_parse_count(optarg, "TB");
 			break;
 		case 't':
-			n_threads = parse_count(optarg, "n_threads");
+			n_threads = mb_parse_count(optarg, "n_threads");
 			break;
 		case 's':
-			iosize = parse_size(optarg, "IO size");
+			iosize = mb_parse_size(optarg, "IO size");
 			break;
 		case 'S':
-			iostride = parse_size(optarg, "IO stride");
+			iostride = mb_parse_size(optarg, "IO stride");
 			break;
 		case 'M':
 			do_summing = 1;
 			break;
 		case 'a':
-			accessedBy = parse_procid(optarg);
+			accessedBy = mb_parse_procid(optarg);
 			break;
 		case 'p':
-			preferredLoc = parse_procid(optarg);
+			preferredLoc = mb_parse_procid(optarg);
 			break;
 		case 'R':
 			readMostly = 1;
 			break;
 		case 'l':
-			n_loops_tail = parse_count(optarg, "n_tail_loops");
+			n_loops_tail = mb_parse_count(optarg, "n_tail_loops");
 			break;
 		case 'q':
 			quiet = 1;
@@ -231,30 +184,6 @@ parse_args(int argc, char *argv[])
 	}
 }
 
-static char *
-get_sizestr(unsigned long num)
-{
-	char	buf[1024];
-
-	if (num < 1024)
-		snprintf(buf, 1024, "%lu", num);
-	else {
-		num /= 1024;
-		if (num < 1024)
-			snprintf(buf, 1024, "%luk", num);
-		else {
-			num /= 1024;
-			if (num < 1024)
-				snprintf(buf, 1024, "%lum", num);
-			else {
-				num /= 1024;
-				snprintf(buf, 1024, "%lug", num);
-			}
-		}
-	}
-	return strdup(buf);
-}
-
 int
 main(int argc, char *argv[])
 {
@@ -265,8 +194,8 @@ main(int argc, char *argv[])
 	parse_args(argc, argv);
 
 	if (!quiet) {
-		char	*str_iosize = get_sizestr(iosize);
-		char	*str_iostride = get_sizestr(iostride);
+		char	*str_iosize = mb_get_sizestr(iosize);
+		char	*str_iostride = mb_get_sizestr(iostride);
 
 		printf("# of tbs: %d, # of threads: %d, IO size: %s, stride: %s\n", n_tbs, n_threads, str_iosize, str_iostride);
 		free(str_iosize);
