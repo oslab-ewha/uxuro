@@ -202,7 +202,12 @@ main(int argc, char *argv[])
 		free(str_iostride);
 	}
 
-	size = n_tbs * n_threads * iostride;
+	size = (unsigned long)n_tbs * n_threads * iostride;
+	if (!quiet) {
+		char	*str_memsize = mb_get_sizestr(size);
+		printf("Managed memory used: %s\n", str_memsize);
+		free(str_memsize);
+	}
 	CUDA_CHECK(cudaMallocManaged(&mem, size), "cudaMallocManaged");
 	if (accessedBy >= 0)
 		CUDA_CHECK(cudaMemAdvise(mem, size, cudaMemAdviseSetAccessedBy, accessedBy), "cudaMemAdvise/AccessedBy");  // set direct access hint
