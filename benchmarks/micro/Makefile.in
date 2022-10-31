@@ -87,7 +87,7 @@ NORMAL_UNINSTALL = :
 PRE_UNINSTALL = :
 POST_UNINSTALL = :
 noinst_PROGRAMS = mb_advise$(EXEEXT) mb_relay$(EXEEXT) \
-	mb_vectoradd$(EXEEXT) mb_matrixmul$(EXEEXT)
+	mb_vectoradd$(EXEEXT) mb_matrixmul$(EXEEXT) mb_stream$(EXEEXT)
 subdir = benchmarks/micro
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/cuda.m4 \
@@ -112,6 +112,10 @@ am_mb_relay_OBJECTS = mb_relay.$(OBJEXT) mb_common.$(OBJEXT)
 mb_relay_OBJECTS = $(am_mb_relay_OBJECTS)
 mb_relay_LDADD = $(LDADD)
 mb_relay_DEPENDENCIES = $(top_srcdir)/examples/common/libutil.a
+am_mb_stream_OBJECTS = mb_stream.$(OBJEXT) mb_common.$(OBJEXT)
+mb_stream_OBJECTS = $(am_mb_stream_OBJECTS)
+mb_stream_LDADD = $(LDADD)
+mb_stream_DEPENDENCIES = $(top_srcdir)/examples/common/libutil.a
 am_mb_vectoradd_OBJECTS = mb_vectoradd.$(OBJEXT) mb_common.$(OBJEXT)
 mb_vectoradd_OBJECTS = $(am_mb_vectoradd_OBJECTS)
 mb_vectoradd_LDADD = $(LDADD)
@@ -141,9 +145,11 @@ am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
 SOURCES = $(mb_advise_SOURCES) $(mb_matrixmul_SOURCES) \
-	$(mb_relay_SOURCES) $(mb_vectoradd_SOURCES)
+	$(mb_relay_SOURCES) $(mb_stream_SOURCES) \
+	$(mb_vectoradd_SOURCES)
 DIST_SOURCES = $(mb_advise_SOURCES) $(mb_matrixmul_SOURCES) \
-	$(mb_relay_SOURCES) $(mb_vectoradd_SOURCES)
+	$(mb_relay_SOURCES) $(mb_stream_SOURCES) \
+	$(mb_vectoradd_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -281,6 +287,7 @@ mb_advise_SOURCES = mb_advise.cu mb_common.cu ../benchmark.h
 mb_relay_SOURCES = mb_relay.cu mb_common.cu ../benchmark.h
 mb_vectoradd_SOURCES = mb_vectoradd.cu mb_common.cu ../benchmark.h
 mb_matrixmul_SOURCES = mb_matrixmul.cu mb_common.cu ../benchmark.h
+mb_stream_SOURCES = mb_stream.cu mb_common.cu ../benchmark.h
 LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
 LDADD = $(top_srcdir)/examples/common/libutil.a -lcuda
 AM_CPPFLAGS = -I.. -I$(top_srcdir)/examples/common
@@ -333,6 +340,10 @@ mb_matrixmul$(EXEEXT): $(mb_matrixmul_OBJECTS) $(mb_matrixmul_DEPENDENCIES) $(EX
 mb_relay$(EXEEXT): $(mb_relay_OBJECTS) $(mb_relay_DEPENDENCIES) $(EXTRA_mb_relay_DEPENDENCIES) 
 	@rm -f mb_relay$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(mb_relay_OBJECTS) $(mb_relay_LDADD) $(LIBS)
+
+mb_stream$(EXEEXT): $(mb_stream_OBJECTS) $(mb_stream_DEPENDENCIES) $(EXTRA_mb_stream_DEPENDENCIES) 
+	@rm -f mb_stream$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(mb_stream_OBJECTS) $(mb_stream_LDADD) $(LIBS)
 
 mb_vectoradd$(EXEEXT): $(mb_vectoradd_OBJECTS) $(mb_vectoradd_DEPENDENCIES) $(EXTRA_mb_vectoradd_DEPENDENCIES) 
 	@rm -f mb_vectoradd$(EXEEXT)
@@ -550,7 +561,7 @@ uninstall-am:
 .PRECIOUS: Makefile
 
 
-mb_advise.o mb_relay.o mb_vectoradd.o mb_matrixmul.o : ../benchmark.h
+mb_advise.o mb_relay.o mb_vectoradd.o mb_matrixmul.o mb_stream.o : ../benchmark.h
 .cu.o:
 	@NVCC_PATH@ -dc $(AM_CPPFLAGS) --maxrregcount 32 @NVCC_CPPFLAGS@ @NVCC_ARCHITECTURE@ $< -o $@
 
