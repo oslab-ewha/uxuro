@@ -24,8 +24,8 @@ usage(void)
 "  -h: help\n");
 }
 
-static unsigned	threads_per_block = 1;
-static unsigned	blocks_per_grid = 1;
+static unsigned threads_per_block = 1;
+static unsigned blocks_per_grid = 1;
 static unsigned	io_size_per_thread = sizeof(int);
 static unsigned	partitions = 0;
 static int	need_uvm = 0;
@@ -98,9 +98,15 @@ main(int argc, char *argv[])
 		printf("threads_per_block: %d, blocks_per_grid: %d, IO_size: %s, partitions: %d\n", threads_per_block, blocks_per_grid, str_io_size_per_thread, partitions);
 		free(str_io_size_per_thread);
 	}
+
 	n_threads = (unsigned long)threads_per_block * blocks_per_grid;
 	total_io_size = (size_t)n_threads * io_size_per_thread;
 	io_count_per_thread = (unsigned long)io_size_per_thread / sizeof(int);
+    if (!quiet) {
+        char	*str_memsize = mb_get_sizestr(total_io_size);
+        printf("Managed memory used: %s\n", str_memsize);
+        free(str_memsize);
+    }
 
 	if (need_uvm) {
 		CUDA_CHECK(cudaMallocManaged((void **)&A, total_io_size), "cudaMallocManaged A");
