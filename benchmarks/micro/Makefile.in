@@ -541,7 +541,7 @@ uninstall-am:
 .PRECIOUS: Makefile
 
 
-mb_advise.o mb_relay.o mb_vectoradd.o: ../benchmark.h
+mb_advise.o mb_relay.o mb_vectoradd.o : ../benchmark.h
 .cu.o:
 	@NVCC_PATH@ -dc $(AM_CPPFLAGS) --maxrregcount 32 @NVCC_CPPFLAGS@ @NVCC_ARCHITECTURE@ $< -o $@
 

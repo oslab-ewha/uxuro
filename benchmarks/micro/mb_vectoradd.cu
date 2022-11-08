@@ -13,7 +13,7 @@ static void
 usage(void)
 {
 	printf(
-"mb_serial_add <options>\n"
+"mb_vectoradd <options>\n"
 "<options>:\n"
 "  -b <blocks_per_grid>: number of TB per Grid\n"
 "  -t <threads_per_block>: number of threads per TB\n"
@@ -24,8 +24,8 @@ usage(void)
 "  -h: help\n");
 }
 
-static unsigned	threads_per_block = 1;
-static unsigned	blocks_per_grid = 1;
+static unsigned threads_per_block = 1;
+static unsigned blocks_per_grid = 1;
 static unsigned	io_size_per_thread = sizeof(int);
 static unsigned	partitions = 0;
 static int	need_uvm = 0;
@@ -47,7 +47,7 @@ parse_args(int argc, char *argv[])
 {
 	int	c;
 
-	while ((c = getopt(argc, argv, "b:t:s:cp:uhq")) != -1) {
+	while ((c = getopt(argc, argv, "b:t:s:p:uhq")) != -1) {
 		switch (c) {
 		case 't':
 			threads_per_block = mb_parse_count(optarg, "threads_per_block");
@@ -79,6 +79,9 @@ parse_args(int argc, char *argv[])
 	if (partitions && blocks_per_grid % partitions != 0) {
 		ERROR("blocks_per_grid should be multiples of partitions");
 	}
+    else if (io_size_per_thread < sizeof(int)) {
+        ERROR("IO size should be larger than sizeof(int)");
+    }
 }
 
 int
@@ -98,9 +101,15 @@ main(int argc, char *argv[])
 		printf("threads_per_block: %d, blocks_per_grid: %d, IO_size: %s, partitions: %d\n", threads_per_block, blocks_per_grid, str_io_size_per_thread, partitions);
 		free(str_io_size_per_thread);
 	}
+
 	n_threads = (unsigned long)threads_per_block * blocks_per_grid;
 	total_io_size = (size_t)n_threads * io_size_per_thread;
 	io_count_per_thread = (unsigned long)io_size_per_thread / sizeof(int);
+    if (!quiet) {
+        char	*str_memsize = mb_get_sizestr(total_io_size);
+        printf("Managed memory used: %s\n", str_memsize);
+        free(str_memsize);
+    }
 
 	if (need_uvm) {
 		CUDA_CHECK(cudaMallocManaged((void **)&A, total_io_size), "cudaMallocManaged A");
@@ -172,7 +181,7 @@ for (i = 0; i < n_threads * io_count_per_thread; i++) {
 		printf("\n");
 	printf("%d:%d/ ", i, C[i]);
 }
-printf("\nthreads_per_block: %d, blocks_per_grid: %d, N: %lu, total_IO_size: %lu, IO_size: %d\n", threads_per_block, blocks_per_grid, n_threads, total_io_size, io_size_per_thread);
+printf("threads_per_block: %d, blocks_per_grid: %d, IO_size: %s, partitions: %d\n", threads_per_block, blocks_per_grid, io_size_per_thread, partitions);
 #endif
 
 	if (need_uvm) {

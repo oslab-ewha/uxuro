@@ -12,6 +12,6 @@ LDADD = $(top_srcdir)/examples/common/libutil.a -lcuda
 
 AM_CPPFLAGS = -I.. -I$(top_srcdir)/examples/common
 
-mb_advise.o mb_relay.o mb_vectoradd.o: ../benchmark.h
+mb_advise.o mb_relay.o mb_vectoradd.o : ../benchmark.h
 
 include $(top_srcdir)/makefile.cu
