@@ -126,7 +126,7 @@ main(int argc, char *argv[])
     int *A, *B, *C;
     int *d_A, *d_B, *d_C;
     unsigned long   size;
-    unsigned    ticks, i;
+    unsigned    ticks;
 
     parse_args(argc, argv);
 
