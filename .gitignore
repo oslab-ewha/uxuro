@@ -27,6 +27,7 @@ Makefile
 /config.log
 /config.status
 /benchmarks/micro/mb_advise
+/benchmarks/micro/mb_copy
 /benchmarks/micro/mb_relay
 /benchmarks/micro/mb_matrixmul
 /benchmarks/micro/mb_stream
