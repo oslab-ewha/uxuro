@@ -19,16 +19,13 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
-#include <float.h>
-#include <limits.h>
-#include <sys/time.h>
 #include <sys/mman.h>
 
 #define CUDA_API_PER_THREAD_DEFAULT_STEAM // to Overlap Data Transfers in CUDA Stream
 #include "mb_common.h"
 #include "timer.h"
 
-#undef PARANOIA // for print VecAdd results
+#undef PARANOIA // for print results
 
 static void
 usage(void)
@@ -56,50 +53,62 @@ static int	quiet;
 
 // Device code
 __global__ void
-set_array_gpu(int *a, int value, int len)
+set_array_gpu(int *mem, int value, int len)
 {
-    int idx = threadIdx.x + blockIdx.x * blockDim.x;
-    if (idx < len) a[idx] = value;
+    unsigned long   idx = threadIdx.x + blockIdx.x * blockDim.x;
+    if (idx < len)
+        mem[idx] = value;
 }
 
 __global__ void
-STREAM_Copy(int *a, int *b, unsigned io_count_per_thread)
+STREAM_copy(int *a, int *b)
 {
-    int idx = (blockDim.x * blockIdx.x + threadIdx.x) * io_count_per_thread;
-    for (int i = 0; i < io_count_per_thread; i++)
-        b[idx + i] = a[idx + i];
+    unsigned long idx = blockDim.x * blockIdx.x + threadIdx.x;
+
+    b[idx] = a[idx];
 }
 
 __global__ void
-STREAM_Scale(int *a, int *b, int scale, unsigned io_count_per_thread)
+STREAM_scale(int *a, int *b, int scale)
 {
-    int idx = (blockDim.x * blockIdx.x + threadIdx.x) * io_count_per_thread;
-    for (int i = 0; i < io_count_per_thread; i++)
-        b[idx + i] = scale * a[idx + i];
+    unsigned long idx = blockDim.x * blockIdx.x + threadIdx.x;
+
+    b[idx] = scale * a[idx];
 }
 
 __global__ void
-STREAM_Add(int *a, int *b, int *c, unsigned io_count_per_thread)
+STREAM_add(int *a, int *b, int *c)
 {
-    int idx = (blockDim.x * blockIdx.x + threadIdx.x) * io_count_per_thread;
-    for (int i = 0; i < io_count_per_thread; i++)
-        c[idx + i] = a[idx + i] + b[idx + i];
+    unsigned long idx = blockDim.x * blockIdx.x + threadIdx.x;
+
+    c[idx] = a[idx] + b[idx];
 }
 
 __global__ void
-STREAM_Triad(int *a, int *b, int *c, int scalar, unsigned io_count_per_thread)
+STREAM_triad(int *a, int *b, int *c, int scalar)
 {
-    int idx = (blockDim.x * blockIdx.x + threadIdx.x) * io_count_per_thread;
-    for (int i = 0; i < io_count_per_thread; i++)
-        c[idx + i] = a[idx + i] + scalar * b[idx + i];
+    unsigned long idx = blockDim.x * blockIdx.x + threadIdx.x;
+
+    c[idx] = a[idx] + scalar * b[idx];
 }
 
-void
-set_array_cpu(int *a, int value, unsigned len)
+static void
+set_array_cpu(int *mem, int value, unsigned length)
 {
-    for (unsigned idx = 0; idx < len; idx++) {
-        a[idx] = value;
+    for (unsigned i = 0; i < length; i++) {
+        mem[i] = value;
     }
+}
+
+static unsigned
+reduce_sum(int* mem, unsigned length) {
+    unsigned long   sum = 0;
+
+    for (unsigned i = 0; i < length; i++) {
+        sum += mem[i];
+    }
+
+    return sum;
 }
 
 // parse user input
@@ -150,13 +159,14 @@ parse_args(int argc, char *argv[])
 
 int
 main(int argc, char *argv[]) {
-    int *A, *B, *C;
-    int *d_A, *d_B, *d_C;
-    unsigned ticks, i, j;
-    unsigned long n_threads, io_count_per_thread;
-    int   scalar = 3;
+    int *a, *b, *c;
+    int *d_a, *d_b, *d_c;
+    int scale = 3, scalar = 5;
+    unsigned ticks, loops, i;
+    unsigned n_threads, io_count_per_thread;
+    unsigned long long  sum_a, sum_b, sum_c;
     size_t  total_io_size;
-    cudaStream_t *streams;
+    cudaStream_t    *streams;
 
     parse_args(argc, argv);
     if (!quiet) {
@@ -167,9 +177,9 @@ main(int argc, char *argv[]) {
         free(str_io_size_per_thread);
     }
 
-    n_threads = (unsigned long) threads_per_block * blocks_per_grid;
+    n_threads = (unsigned)threads_per_block * blocks_per_grid;
     total_io_size = (size_t) n_threads * io_size_per_thread;
-    io_count_per_thread = (unsigned long) io_size_per_thread / sizeof(int);
+    io_count_per_thread = (unsigned)io_size_per_thread / sizeof(int);
     if (!quiet) {
         char	*str_memsize = mb_get_sizestr(total_io_size);
         printf("Managed memory used: %s\n", str_memsize);
@@ -177,130 +187,157 @@ main(int argc, char *argv[]) {
     }
 
     if (need_uvm) {
-        CUDA_CHECK(cudaMallocManaged((void **) &A, total_io_size), "cudaMallocManaged A");
-        CUDA_CHECK(cudaMallocManaged((void **) &B, total_io_size), "cudaMallocManaged B");
-        CUDA_CHECK(cudaMallocManaged((void **) &C, total_io_size), "cudaMallocManaged C");
-    } else {
-        CUDA_CHECK(cudaMalloc((void **) &d_A, total_io_size), "cudaMalloc A");
-        CUDA_CHECK(cudaMalloc((void **) &d_B, total_io_size), "cudaMalloc B");
-        CUDA_CHECK(cudaMalloc((void **) &d_C, total_io_size), "cudaMalloc C");
+        CUDA_CHECK(cudaMallocManaged((void **)&a, total_io_size), "cudaMallocManaged a");
+        CUDA_CHECK(cudaMallocManaged((void **)&b, total_io_size), "cudaMallocManaged b");
+        CUDA_CHECK(cudaMallocManaged((void **)&c, total_io_size), "cudaMallocManaged c");
+    }
+    else {
+        CUDA_CHECK(cudaMalloc((void **)&d_a, total_io_size), "cudaMalloc a");
+        CUDA_CHECK(cudaMalloc((void **)&d_b, total_io_size), "cudaMalloc b");
+        CUDA_CHECK(cudaMalloc((void **)&d_c, total_io_size), "cudaMalloc c");
 
         if (partitions) {
-            CUDA_CHECK(cudaMallocHost(&A, total_io_size), "cudaMallocHost A");
-            CUDA_CHECK(cudaMallocHost(&B, total_io_size), "cudaMallocHost B");
-            CUDA_CHECK(cudaMallocHost(&C, total_io_size), "cudaMallocHost C");
-        } else {
-            A = (int *) malloc(total_io_size);
-            B = (int *) malloc(total_io_size);
-            C = (int *) malloc(total_io_size);
+            CUDA_CHECK(cudaMallocHost(&a, total_io_size), "cudaMallocHost a");
+            CUDA_CHECK(cudaMallocHost(&b, total_io_size), "cudaMallocHost b");
+            CUDA_CHECK(cudaMallocHost(&c, total_io_size), "cudaMallocHost c");
+        }
+	else {
+            a = (int *) malloc(total_io_size);
+            b = (int *) malloc(total_io_size);
+            c = (int *) malloc(total_io_size);
         }
     }
 
     init_tickcount();
 
-    set_array_cpu(A, 2, n_threads * io_count_per_thread);
-    set_array_cpu(B, 5, n_threads * io_count_per_thread);
-    set_array_cpu(C, 5, n_threads * io_count_per_thread);
-
     if (need_uvm) {
-        for (j = 0; j < n_loops; j++)
-        {
-            STREAM_Copy<<<blocks_per_grid, threads_per_block>>>(A, C, io_count_per_thread);
+        for (loops = 0; loops < n_loops; loops++) {
+            set_array_cpu(a, 2, n_threads * io_count_per_thread);
+            set_array_cpu(b, 3, n_threads * io_count_per_thread);
+            set_array_cpu(c, 5, n_threads * io_count_per_thread);
+            
+            STREAM_copy<<<blocks_per_grid * io_count_per_thread, threads_per_block>>>(a, c);
             cudaDeviceSynchronize();
 
-            STREAM_Scale<<<blocks_per_grid, threads_per_block>>>(B, C, scalar, io_count_per_thread);
+            STREAM_scale<<<blocks_per_grid * io_count_per_thread, threads_per_block>>>(b, c, scale);
             cudaDeviceSynchronize();
 
-            STREAM_Add<<<blocks_per_grid, threads_per_block>>>(A, B, C, io_count_per_thread);
+            STREAM_add<<<blocks_per_grid * io_count_per_thread, threads_per_block>>>(a, b, c);
             cudaDeviceSynchronize();
 
-            STREAM_Triad<<<blocks_per_grid, threads_per_block>>>(B, C, A, scalar, io_count_per_thread);
+            STREAM_triad<<<blocks_per_grid * io_count_per_thread, threads_per_block>>>(b, c, a, scalar);
             cudaDeviceSynchronize();
         }
     }
     else if (partitions) {
-        unsigned long	n_threads_part = n_threads / partitions;
-        unsigned long	io_size_part = (unsigned long)total_io_size / partitions;
-        unsigned long	offset = 0;
+        unsigned	n_threads_part = n_threads / partitions;
+        unsigned	io_size_part = (unsigned)total_io_size / partitions;
+        unsigned    offset;
         streams = (cudaStream_t *)malloc(partitions * sizeof(cudaStream_t));
 
-        for (i = 0; i < partitions; i++) {
-            CUDA_CHECK(cudaStreamCreate(&streams[i]), "cudaStreamCreate");
+        for (loops = 0; loops < n_loops; loops++) {
+            offset = 0;
+            set_array_cpu(a, 2, n_threads * io_count_per_thread);
+            set_array_cpu(b, 3, n_threads * io_count_per_thread);
+            set_array_cpu(c, 5, n_threads * io_count_per_thread);
 
-            CUDA_CHECK(cudaMemcpyAsync(&d_A[offset], &A[offset], io_size_part, cudaMemcpyHostToDevice, streams[i]), "cudaMemcpyAsync A");
-            CUDA_CHECK(cudaMemcpyAsync(&d_B[offset], &B[offset], io_size_part, cudaMemcpyHostToDevice, streams[i]), "cudaMemcpyAsync B");
-            CUDA_CHECK(cudaMemcpyAsync(&d_C[offset], &C[offset], io_size_part, cudaMemcpyHostToDevice, streams[i]), "cudaMemcpyAsync C");
+            for (i = 0; i < partitions; i++) {
+                CUDA_CHECK(cudaStreamCreate(&streams[i]), "cudaStreamCreate");
 
-            for (j = 0; j < n_loops; j++)
-            {
-                STREAM_Copy<<<blocks_per_grid / partitions, threads_per_block, 0, streams[i]>>>(d_A + offset, d_C + offset, io_count_per_thread);
+                CUDA_CHECK(cudaMemcpyAsync(&d_a[offset], &a[offset], io_size_part, cudaMemcpyHostToDevice, streams[i]),
+                           "cudaMemcpyAsync a to device");
+                CUDA_CHECK(cudaMemcpyAsync(&d_b[offset], &b[offset], io_size_part, cudaMemcpyHostToDevice, streams[i]),
+                           "cudaMemcpyAsync b to device");
+                CUDA_CHECK(cudaMemcpyAsync(&d_c[offset], &c[offset], io_size_part, cudaMemcpyHostToDevice, streams[i]),
+                           "cudaMemcpyAsync c to device");
+
+                STREAM_copy<<<(blocks_per_grid * io_count_per_thread) / partitions, threads_per_block, 0, streams[i]>>>(
+                        d_a + offset, d_c + offset);
                 cudaStreamSynchronize(streams[i]);
 
-                STREAM_Scale<<<blocks_per_grid / partitions, threads_per_block, 0, streams[i]>>>(d_B + offset, d_C + offset, scalar, io_count_per_thread);
+                STREAM_scale<<<(blocks_per_grid * io_count_per_thread) / partitions, threads_per_block, 0, streams[i]>>>(
+                        d_b + offset, d_c + offset, scale);
                 cudaStreamSynchronize(streams[i]);
 
-                STREAM_Add<<<blocks_per_grid / partitions, threads_per_block, 0, streams[i]>>>(d_A + offset, d_B + offset, d_C + offset, io_count_per_thread);
+                STREAM_add<<<(blocks_per_grid * io_count_per_thread) / partitions, threads_per_block, 0, streams[i]>>>(
+                        d_a + offset, d_b + offset, d_c + offset);
                 cudaStreamSynchronize(streams[i]);
 
-                STREAM_Triad<<<blocks_per_grid / partitions, threads_per_block, 0, streams[i]>>>(d_B + offset, d_C + offset, d_A + offset, scalar, io_count_per_thread);
+                STREAM_triad<<<(blocks_per_grid * io_count_per_thread) / partitions, threads_per_block, 0, streams[i]>>>(
+                        d_b + offset, d_c + offset, d_a + offset, scalar);
                 cudaStreamSynchronize(streams[i]);
+
+                CUDA_CHECK(cudaMemcpyAsync(&a[offset], &d_a[offset], io_size_part, cudaMemcpyDeviceToHost, streams[i]),
+                           "cudaMemcpyAsync a to host");
+                CUDA_CHECK(cudaMemcpyAsync(&b[offset], &d_b[offset], io_size_part, cudaMemcpyDeviceToHost, streams[i]),
+                           "cudaMemcpyAsync b to host");
+                CUDA_CHECK(cudaMemcpyAsync(&c[offset], &d_c[offset], io_size_part, cudaMemcpyDeviceToHost, streams[i]),
+                           "cudaMemcpyAsync c to host");
+                cudaStreamSynchronize(streams[i]);
+
+                offset += n_threads_part * io_count_per_thread;
             }
-
-            offset += n_threads_part * io_count_per_thread;
         }
     }
     else {
-        CUDA_CHECK(cudaMemcpy(d_A, A, total_io_size, cudaMemcpyHostToDevice), "cudaMemcpy A");
-        CUDA_CHECK(cudaMemcpy(d_B, B, total_io_size, cudaMemcpyHostToDevice), "cudaMemcpy B");
-        CUDA_CHECK(cudaMemcpy(d_C, C, total_io_size, cudaMemcpyHostToDevice), "cudaMemcpy C");
+        for (loops = 0; loops < n_loops; loops++) {
+            set_array_cpu(a, 2, n_threads * io_count_per_thread);
+            set_array_cpu(b, 3, n_threads * io_count_per_thread);
+            set_array_cpu(c, 5, n_threads * io_count_per_thread);
 
-        for (j = 0; j < n_loops; j++)
-        {
-            STREAM_Copy<<<blocks_per_grid, threads_per_block>>>(d_A, d_C, io_count_per_thread);
+            CUDA_CHECK(cudaMemcpy(d_a, a, total_io_size, cudaMemcpyHostToDevice), "cudaMemcpy a to device");
+            CUDA_CHECK(cudaMemcpy(d_b, b, total_io_size, cudaMemcpyHostToDevice), "cudaMemcpy b to device");
+            CUDA_CHECK(cudaMemcpy(d_c, c, total_io_size, cudaMemcpyHostToDevice), "cudaMemcpy c to device");
+
+            STREAM_copy<<<blocks_per_grid * io_count_per_thread, threads_per_block>>>(d_a, d_c);
             cudaDeviceSynchronize();
 
-            STREAM_Scale<<<blocks_per_grid, threads_per_block>>>(d_B, d_C, scalar, io_count_per_thread);
+            STREAM_scale<<<blocks_per_grid * io_count_per_thread, threads_per_block>>>(d_b, d_c, scale);
             cudaDeviceSynchronize();
 
-            STREAM_Add<<<blocks_per_grid, threads_per_block>>>(d_A, d_B, d_C, io_count_per_thread);
+            STREAM_add<<<blocks_per_grid * io_count_per_thread, threads_per_block>>>(d_a, d_b, d_c);
             cudaDeviceSynchronize();
 
-            STREAM_Triad<<<blocks_per_grid, threads_per_block>>>(d_B, d_C, d_A, scalar, io_count_per_thread);
+            STREAM_triad<<<blocks_per_grid * io_count_per_thread, threads_per_block>>>(d_b, d_c, d_a, scalar);
             cudaDeviceSynchronize();
+
+            CUDA_CHECK(cudaMemcpy(a, d_a, total_io_size, cudaMemcpyDeviceToHost), "cudaMemcpy a to host");
+            CUDA_CHECK(cudaMemcpy(b, d_b, total_io_size, cudaMemcpyDeviceToHost), "cudaMemcpy b to host");
+            CUDA_CHECK(cudaMemcpy(c, d_c, total_io_size, cudaMemcpyDeviceToHost), "cudaMemcpy c to host");
         }
     }
+
+    sum_a = reduce_sum(a, n_threads * io_count_per_thread);
+    sum_b = reduce_sum(b, n_threads * io_count_per_thread);
+    sum_c = reduce_sum(c, n_threads * io_count_per_thread);
 
     ticks = get_tickcount();
 
 // print result
 #ifdef PARANOIA
-for (i = 0; i < n_threads * io_count_per_thread; i++) {
-	if (i % threads_per_block == 0)
-		printf("\n");
-	printf("%d:%d/ ", i, C[i]);
-}
-printf("threads_per_block: %d, blocks_per_grid: %d, IO_size: %d, loops: %d, partitions: %d\n", threads_per_block, blocks_per_grid, io_size_per_thread, n_loops, partitions);
+    printf("result_sum: %lld\n", sum_a + sum_b + sum_c);
+    printf("ground_truth: %lld\n", ((3 + scalar * 5) + 3 + (2 + 3)) * (n_threads * io_count_per_thread));
 #endif
 
     if (need_uvm) {
-        cudaFree(A);
-        cudaFree(B);
-        cudaFree(C);
+        cudaFree(a);
+        cudaFree(b);
+        cudaFree(c);
     }
     else {
-        cudaFree(d_A);
-        cudaFree(d_B);
-        cudaFree(d_C);
+        cudaFree(d_a);
+        cudaFree(d_b);
+        cudaFree(d_c);
 
         if (partitions) {
-            cudaFreeHost(A);
-            cudaFreeHost(B);
-            cudaFreeHost(C);
+            cudaFreeHost(a);
+            cudaFreeHost(b);
+            cudaFreeHost(c);
         }
         else {
-            free(A);
-            free(B);
-            free(C);
+            free(a);
+            free(b);
+            free(c);
         }
     }
 
