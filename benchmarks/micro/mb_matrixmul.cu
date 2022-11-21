@@ -1,8 +1,9 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <time.h>
+#include <stdlib.h>
 
 #include "mb_common.h"
 #include "timer.h"
@@ -11,7 +12,7 @@
 # define MIN(x, y) ((x) < (y) ? (x) : (y))
 # endif
 
-#undef PARANOIA // for print MatMul results
+#undef PARANOIA // for print matrix_mul results
 
 static void
 usage(void)
@@ -37,44 +38,48 @@ static int	quiet;
 
 // Device code
 __global__ void
-MatMul(int *A, int *B, int *C, unsigned M, unsigned K, unsigned N)
+matrix_mul(int *a, int *b, int *c, unsigned m, unsigned k, unsigned n)
 {
-    /* A: MxK   B: KxN  C: MxN */
-    unsigned i = (threadIdx.y + blockIdx.y * blockDim.y);
-    unsigned j = (threadIdx.x + blockIdx.x * blockDim.x);
+    /* a: mxk   b: kxn  c: mxn */
+    unsigned idx = (threadIdx.y + blockIdx.y * blockDim.y);
+    unsigned jdx = (threadIdx.x + blockIdx.x * blockDim.x);
 
-    if(i < M && j < N) {
+    if(idx < m && jdx < n) {
         int elem = 0;
-        for (unsigned k = 0; k < K; ++k)
-            elem += A[i * K + k] * B[k * N + j];
+        for (unsigned kdx = 0; kdx < k; ++kdx)
+            elem += a[idx * k + kdx] * b[kdx * n + jdx];
 
-        C[i * N + j] = elem;
+        c[idx * n + jdx] = elem;
+    }
+}
+
+static void
+read_value_from_cpu(int* mem, unsigned length) {
+    int value;
+
+    for (unsigned i = 0; i < length; i++) {
+        value = mem[i];
     }
 }
 
 static int
 get_random_number(int min, int max)
 {
-    int random = 0;
+    int random;
 
-    while (1) {
-        static unsigned int seed = 5323;
-        seed = 8253729 * seed + 2396403;            // using overflow
+    srand(clock());
+    random = rand() % (max - min) + min;
 
-        random = seed % max;
-
-        if (random >= min && random < max)
-            break;
-    }
     return random;
 }
 
 static void
 init_random_matrix(int *mat, unsigned row, unsigned col)
 {
+    int r;
     for (unsigned i = 0; i < row; ++i) {
         for (unsigned j = 0; j < col; ++j) {
-            int r = get_random_number(0, 10);
+            r = get_random_number(0, 10);
             mat[i * col + j] = r;
         }
     }
@@ -123,8 +128,8 @@ parse_args(int argc, char *argv[])
 int
 main(int argc, char *argv[])
 {
-    int *A, *B, *C;
-    int *d_A, *d_B, *d_C;
+    int *a, *b, *c;
+    int *d_a, *d_b, *d_c;
     unsigned long   size;
     unsigned    ticks, i;
 
@@ -137,19 +142,19 @@ main(int argc, char *argv[])
         char	*str_threadsPerBlock = mb_get_sizestr(threads_per_block);
         char	*str_blocksPerGridX = mb_get_sizestr(blocks_per_grid_dim.x);
         char	*str_blocksPerGridY = mb_get_sizestr(blocks_per_grid_dim.y);
-        char	*str_M = mb_get_sizestr(m);
-        char	*str_K = mb_get_sizestr(k);
-        char	*str_N = mb_get_sizestr(n);
+        char	*str_m = mb_get_sizestr(m);
+        char	*str_k = mb_get_sizestr(k);
+        char	*str_n = mb_get_sizestr(n);
 
         printf("threads_per_block_dim: (%s,%s), blocks_per_grid_dim: (%s,%s), m: %s, k: %s, n: %s\n",
-               str_threadsPerBlock, str_threadsPerBlock, str_blocksPerGridX, str_blocksPerGridY, str_M, str_K, str_N);
+               str_threadsPerBlock, str_threadsPerBlock, str_blocksPerGridX, str_blocksPerGridY, str_m, str_k, str_n);
 
         free(str_threadsPerBlock);
         free(str_blocksPerGridX);
         free(str_blocksPerGridY);
-        free(str_M);
-        free(str_K);
-        free(str_N);
+        free(str_m);
+        free(str_k);
+        free(str_n);
     }
 
     size = (unsigned long)m * k * n;
@@ -160,74 +165,76 @@ main(int argc, char *argv[])
     }
 
     if (need_uvm) {
-        CUDA_CHECK(cudaMallocManaged((void **) &A, m * k * sizeof(int)), "cudaMallocManaged A");
-        CUDA_CHECK(cudaMallocManaged((void **) &B, k * n * sizeof(int)), "cudaMallocManaged B");
-        CUDA_CHECK(cudaMallocManaged((void **) &C, m * n * sizeof(int)), "cudaMallocManaged C");
+        CUDA_CHECK(cudaMallocManaged((void **) &a, m * k * sizeof(int)), "cudaMallocManaged a");
+        CUDA_CHECK(cudaMallocManaged((void **) &b, k * n * sizeof(int)), "cudaMallocManaged b");
+        CUDA_CHECK(cudaMallocManaged((void **) &c, m * n * sizeof(int)), "cudaMallocManaged c");
     } else {
-        CUDA_CHECK(cudaMalloc((void **) &d_A, m * k * sizeof(int)), "cudaMalloc A");
-        CUDA_CHECK(cudaMalloc((void **) &d_B, k * n * sizeof(int)), "cudaMalloc B");
-        CUDA_CHECK(cudaMalloc((void **) &d_C, m * n * sizeof(int)), "cudaMalloc C");
+        CUDA_CHECK(cudaMalloc((void **) &d_a, m * k * sizeof(int)), "cudaMalloc a");
+        CUDA_CHECK(cudaMalloc((void **) &d_b, k * n * sizeof(int)), "cudaMalloc b");
+        CUDA_CHECK(cudaMalloc((void **) &d_c, m * n * sizeof(int)), "cudaMalloc c");
 
-        A = (int *) malloc(m * k * sizeof(int));
-        B = (int *) malloc(k * n * sizeof(int));
-        C = (int *) malloc(m * n * sizeof(int));
+        a = (int *) malloc(m * k * sizeof(int));
+        b = (int *) malloc(k * n * sizeof(int));
+        c = (int *) malloc(m * n * sizeof(int));
     }
 
     init_tickcount();
 
-    init_random_matrix(A, m, k);
-    init_random_matrix(B, k, n);
+    init_random_matrix(a, m, k);
+    init_random_matrix(b, k, n);
 
     if (need_uvm) {
-        MatMul<<<blocks_per_grid_dim, threads_per_block_dim>>>(A, B, C, m, k, n);
+        matrix_mul<<<blocks_per_grid_dim, threads_per_block_dim>>>(a, b, c, m, k, n);
         cudaDeviceSynchronize();
     } else {
-        CUDA_CHECK(cudaMemcpy(d_A, A, m * k * sizeof(int), cudaMemcpyHostToDevice), "cudaMemcpy A");
-        CUDA_CHECK(cudaMemcpy(d_B, B, k * n * sizeof(int), cudaMemcpyHostToDevice), "cudaMemcpy B");
-        MatMul<<<blocks_per_grid_dim, threads_per_block_dim>>>(d_A, d_B, d_C, m, k, n);
-        CUDA_CHECK(cudaMemcpy(C, d_C, m * n * sizeof(int), cudaMemcpyDeviceToHost), "cudaMemcpy C");
+        CUDA_CHECK(cudaMemcpy(d_a, a, m * k * sizeof(int), cudaMemcpyHostToDevice), "cudaMemcpy a");
+        CUDA_CHECK(cudaMemcpy(d_b, b, k * n * sizeof(int), cudaMemcpyHostToDevice), "cudaMemcpy b");
+        matrix_mul<<<blocks_per_grid_dim, threads_per_block_dim>>>(d_a, d_b, d_c, m, k, n);
+        CUDA_CHECK(cudaMemcpy(c, d_c, m * n * sizeof(int), cudaMemcpyDeviceToHost), "cudaMemcpy c");
         cudaDeviceSynchronize();
     }
+
+    read_value_from_cpu(c, m * n);
 
     ticks = get_tickcount();
 
 // print result
 #ifdef PARANOIA
     for (i = 0; i < m * k; i++) {
-        if (i % threads_per_block == 0)
+        if (i % k == 0)
             printf("\n");
-        printf("%d:%d/ ", i, A[i]);
+        printf("%d:%d/ ", i, a[i]);
     }
     printf("\n");
 
     for (i = 0; i < k * n; i++) {
-        if (i % threads_per_block == 0)
+        if (i % n == 0)
             printf("\n");
-        printf("%d:%d/ ", i, B[i]);
+        printf("%d:%d/ ", i, b[i]);
     }
     printf("\n");
 
     for (i = 0; i < m * n; i++) {
-            if (i % threads_per_block == 0)
-                printf("\n");
-            printf("%d:%d/ ", i, C[i]);
+        if (i % n == 0)
+            printf("\n");
+        printf("%d:%d/ ", i, c[i]);
     }
     printf("\nthreads_per_block_dim: (%d,%d), blocks_per_grid_dim: (%d,%d), m: %d, k: %d, n: %d\n",
                threads_per_block_dim.x, threads_per_block_dim.y, blocks_per_grid_dim.x, blocks_per_grid_dim.y, m, k, n);
 #endif
 
     if (need_uvm) {
-        cudaFree(A);
-        cudaFree(B);
-        cudaFree(C);
+        cudaFree(a);
+        cudaFree(b);
+        cudaFree(c);
     } else {
-        cudaFree(d_A);
-        cudaFree(d_B);
-        cudaFree(d_C);
+        cudaFree(d_a);
+        cudaFree(d_b);
+        cudaFree(d_c);
 
-        free(A);
-        free(B);
-        free(C);
+        free(a);
+        free(b);
+        free(c);
     }
 
     printf("elapsed: %.3f\n", ticks / 1000.0);
