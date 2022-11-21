@@ -131,7 +131,7 @@ main(int argc, char *argv[])
     int *a, *b, *c;
     int *d_a, *d_b, *d_c;
     unsigned long   size;
-    unsigned    ticks;
+    unsigned    ticks, i;
 
     parse_args(argc, argv);
 
