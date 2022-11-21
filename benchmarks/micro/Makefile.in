@@ -87,7 +87,8 @@ NORMAL_UNINSTALL = :
 PRE_UNINSTALL = :
 POST_UNINSTALL = :
 noinst_PROGRAMS = mb_advise$(EXEEXT) mb_relay$(EXEEXT) \
-	mb_vectoradd$(EXEEXT) mb_matrixmul$(EXEEXT) mb_stream$(EXEEXT)
+	mb_vectoradd$(EXEEXT) mb_matrixmul$(EXEEXT) mb_stream$(EXEEXT) \
+	mb_copy$(EXEEXT)
 subdir = benchmarks/micro
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/cuda.m4 \
@@ -104,6 +105,10 @@ am_mb_advise_OBJECTS = mb_advise.$(OBJEXT) mb_common.$(OBJEXT)
 mb_advise_OBJECTS = $(am_mb_advise_OBJECTS)
 mb_advise_LDADD = $(LDADD)
 mb_advise_DEPENDENCIES = $(top_srcdir)/examples/common/libutil.a
+am_mb_copy_OBJECTS = mb_copy.$(OBJEXT) mb_common.$(OBJEXT)
+mb_copy_OBJECTS = $(am_mb_copy_OBJECTS)
+mb_copy_LDADD = $(LDADD)
+mb_copy_DEPENDENCIES = $(top_srcdir)/examples/common/libutil.a
 am_mb_matrixmul_OBJECTS = mb_matrixmul.$(OBJEXT) mb_common.$(OBJEXT)
 mb_matrixmul_OBJECTS = $(am_mb_matrixmul_OBJECTS)
 mb_matrixmul_LDADD = $(LDADD)
@@ -144,12 +149,12 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(mb_advise_SOURCES) $(mb_matrixmul_SOURCES) \
-	$(mb_relay_SOURCES) $(mb_stream_SOURCES) \
-	$(mb_vectoradd_SOURCES)
-DIST_SOURCES = $(mb_advise_SOURCES) $(mb_matrixmul_SOURCES) \
-	$(mb_relay_SOURCES) $(mb_stream_SOURCES) \
-	$(mb_vectoradd_SOURCES)
+SOURCES = $(mb_advise_SOURCES) $(mb_copy_SOURCES) \
+	$(mb_matrixmul_SOURCES) $(mb_relay_SOURCES) \
+	$(mb_stream_SOURCES) $(mb_vectoradd_SOURCES)
+DIST_SOURCES = $(mb_advise_SOURCES) $(mb_copy_SOURCES) \
+	$(mb_matrixmul_SOURCES) $(mb_relay_SOURCES) \
+	$(mb_stream_SOURCES) $(mb_vectoradd_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -288,6 +293,7 @@ mb_relay_SOURCES = mb_relay.cu mb_common.cu ../benchmark.h
 mb_vectoradd_SOURCES = mb_vectoradd.cu mb_common.cu ../benchmark.h
 mb_matrixmul_SOURCES = mb_matrixmul.cu mb_common.cu ../benchmark.h
 mb_stream_SOURCES = mb_stream.cu mb_common.cu ../benchmark.h
+mb_copy_SOURCES = mb_copy.cu mb_common.cu ../benchmark.h
 LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
 LDADD = $(top_srcdir)/examples/common/libutil.a -lcuda
 AM_CPPFLAGS = -I.. -I$(top_srcdir)/examples/common
@@ -332,6 +338,10 @@ clean-noinstPROGRAMS:
 mb_advise$(EXEEXT): $(mb_advise_OBJECTS) $(mb_advise_DEPENDENCIES) $(EXTRA_mb_advise_DEPENDENCIES) 
 	@rm -f mb_advise$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(mb_advise_OBJECTS) $(mb_advise_LDADD) $(LIBS)
+
+mb_copy$(EXEEXT): $(mb_copy_OBJECTS) $(mb_copy_DEPENDENCIES) $(EXTRA_mb_copy_DEPENDENCIES) 
+	@rm -f mb_copy$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(mb_copy_OBJECTS) $(mb_copy_LDADD) $(LIBS)
 
 mb_matrixmul$(EXEEXT): $(mb_matrixmul_OBJECTS) $(mb_matrixmul_DEPENDENCIES) $(EXTRA_mb_matrixmul_DEPENDENCIES) 
 	@rm -f mb_matrixmul$(EXEEXT)
