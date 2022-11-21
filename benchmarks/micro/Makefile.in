@@ -88,7 +88,7 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 noinst_PROGRAMS = mb_advise$(EXEEXT) mb_relay$(EXEEXT) \
 	mb_vectoradd$(EXEEXT) mb_matrixmul$(EXEEXT) mb_stream$(EXEEXT) \
-	mb_copy$(EXEEXT)
+	mb_copy$(EXEEXT) mb_random$(EXEEXT)
 subdir = benchmarks/micro
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/cuda.m4 \
@@ -113,6 +113,10 @@ am_mb_matrixmul_OBJECTS = mb_matrixmul.$(OBJEXT) mb_common.$(OBJEXT)
 mb_matrixmul_OBJECTS = $(am_mb_matrixmul_OBJECTS)
 mb_matrixmul_LDADD = $(LDADD)
 mb_matrixmul_DEPENDENCIES = $(top_srcdir)/examples/common/libutil.a
+am_mb_random_OBJECTS = mb_random.$(OBJEXT) mb_common.$(OBJEXT)
+mb_random_OBJECTS = $(am_mb_random_OBJECTS)
+mb_random_LDADD = $(LDADD)
+mb_random_DEPENDENCIES = $(top_srcdir)/examples/common/libutil.a
 am_mb_relay_OBJECTS = mb_relay.$(OBJEXT) mb_common.$(OBJEXT)
 mb_relay_OBJECTS = $(am_mb_relay_OBJECTS)
 mb_relay_LDADD = $(LDADD)
@@ -150,11 +154,13 @@ am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
 SOURCES = $(mb_advise_SOURCES) $(mb_copy_SOURCES) \
-	$(mb_matrixmul_SOURCES) $(mb_relay_SOURCES) \
-	$(mb_stream_SOURCES) $(mb_vectoradd_SOURCES)
+	$(mb_matrixmul_SOURCES) $(mb_random_SOURCES) \
+	$(mb_relay_SOURCES) $(mb_stream_SOURCES) \
+	$(mb_vectoradd_SOURCES)
 DIST_SOURCES = $(mb_advise_SOURCES) $(mb_copy_SOURCES) \
-	$(mb_matrixmul_SOURCES) $(mb_relay_SOURCES) \
-	$(mb_stream_SOURCES) $(mb_vectoradd_SOURCES)
+	$(mb_matrixmul_SOURCES) $(mb_random_SOURCES) \
+	$(mb_relay_SOURCES) $(mb_stream_SOURCES) \
+	$(mb_vectoradd_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -294,6 +300,7 @@ mb_vectoradd_SOURCES = mb_vectoradd.cu mb_common.cu ../benchmark.h
 mb_matrixmul_SOURCES = mb_matrixmul.cu mb_common.cu ../benchmark.h
 mb_stream_SOURCES = mb_stream.cu mb_common.cu ../benchmark.h
 mb_copy_SOURCES = mb_copy.cu mb_common.cu ../benchmark.h
+mb_random_SOURCES = mb_random.cu mb_common.cu ../benchmark.h
 LINK = @NVCC_PATH@ @NVCC_ARCHITECTURE@ -o $@
 LDADD = $(top_srcdir)/examples/common/libutil.a -lcuda
 AM_CPPFLAGS = -I.. -I$(top_srcdir)/examples/common
@@ -346,6 +353,10 @@ mb_copy$(EXEEXT): $(mb_copy_OBJECTS) $(mb_copy_DEPENDENCIES) $(EXTRA_mb_copy_DEP
 mb_matrixmul$(EXEEXT): $(mb_matrixmul_OBJECTS) $(mb_matrixmul_DEPENDENCIES) $(EXTRA_mb_matrixmul_DEPENDENCIES) 
 	@rm -f mb_matrixmul$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(mb_matrixmul_OBJECTS) $(mb_matrixmul_LDADD) $(LIBS)
+
+mb_random$(EXEEXT): $(mb_random_OBJECTS) $(mb_random_DEPENDENCIES) $(EXTRA_mb_random_DEPENDENCIES) 
+	@rm -f mb_random$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(mb_random_OBJECTS) $(mb_random_LDADD) $(LIBS)
 
 mb_relay$(EXEEXT): $(mb_relay_OBJECTS) $(mb_relay_DEPENDENCIES) $(EXTRA_mb_relay_DEPENDENCIES) 
 	@rm -f mb_relay$(EXEEXT)
@@ -571,7 +582,7 @@ uninstall-am:
 .PRECIOUS: Makefile
 
 
-mb_advise.o mb_relay.o mb_vectoradd.o mb_matrixmul.o mb_stream.o : ../benchmark.h
+mb_advise.o mb_relay.o mb_vectoradd.o mb_matrixmul.o mb_stream.o mb_random.o : ../benchmark.h
 .cu.o:
 	@NVCC_PATH@ -dc $(AM_CPPFLAGS) --maxrregcount 32 @NVCC_CPPFLAGS@ @NVCC_ARCHITECTURE@ $< -o $@
 
