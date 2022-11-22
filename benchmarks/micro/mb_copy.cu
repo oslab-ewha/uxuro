@@ -43,7 +43,7 @@ touching_by_cpu(unsigned char *mem)
 	unsigned	i;
 
 	for (i = 0; i < copy_size; i += 4096) {
-		*(unsigned char *)mem = 0;
+		*(unsigned char *)(mem + i) = 0;
 	}
 }
 
