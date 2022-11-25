@@ -16,6 +16,9 @@ usage(void)
 "  -s <copy size>: read/write size in byte per thread (default: 2MB)\n"
 "  -m <mode>: copy mode: h2g, g2h, g2g, p2p (default: h2g)\n"
 "  -t <host memory type>: paged, locked, uvm (default: paged)\n"
+"  -k <stride>: stride size for GPU access (default: 64k)\n"
+"  -b <TB size>: TB size for GPU access (default: 1)\n"
+"  -r <thread size>: thread size for GPU access (default: 16)\n"
 "  -h: help\n");
 }
 
@@ -35,6 +38,10 @@ static unsigned char	*mem_gpu2;
 static unsigned char	*mem_host;
 static unsigned char	*mem_uvm;
 static unsigned	copy_size = (1024 * 1024 * 2);
+static unsigned	stride_gpu = (64 * 1024);
+static unsigned	n_tb = 1;
+static unsigned	n_threads = 16;
+
 static int	quiet;
 
 static void
@@ -47,24 +54,22 @@ touching_by_cpu(unsigned char *mem)
 	}
 }
 
-#define TWO_MB	(1024 * 1024 * 2)
-
 static __global__ void
-touching(unsigned char *mem, unsigned copy_size)
+touching(unsigned char *mem, unsigned copy_size, unsigned stride_gpu)
 {
 	unsigned	idx;
 	unsigned	i;
 
 	idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-	for (i = idx * TWO_MB; i < copy_size; i += blockDim.x * TWO_MB)
+	for (i = idx * stride_gpu; i < copy_size; i += blockDim.x * stride_gpu)
 		mem[idx + i] = 0;
 }
 
 static void
 touching_by_gpu(unsigned char *mem)
 {
-	touching<<<1, 16>>>(mem, copy_size);
+	touching<<<n_tb, n_threads>>>(mem, copy_size, stride_gpu);
 	cudaDeviceSynchronize();
 }
 
@@ -105,7 +110,7 @@ parse_args(int argc, char *argv[])
 {
 	int	c;
 
-	while ((c = getopt(argc, argv, "s:m:t:hq")) != -1) {
+	while ((c = getopt(argc, argv, "s:m:t:k:b:r:hq")) != -1) {
 		switch (c) {
 		case 's':
 			copy_size = mb_parse_size(optarg, "copy size");
@@ -115,6 +120,15 @@ parse_args(int argc, char *argv[])
 			break;
 		case 't':
 			mode_hmalloc = parse_mode_hmalloc(optarg);
+			break;
+		case 'k':
+			stride_gpu = mb_parse_size(optarg, "stride size");
+			break;
+		case 'b':
+			n_tb = mb_parse_count(optarg, "thread block size");
+			break;
+		case 'r':
+			n_threads = mb_parse_count(optarg, "thread size");
 			break;
 		case 'q':
 			quiet = 1;
