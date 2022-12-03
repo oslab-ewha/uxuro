@@ -17,6 +17,7 @@ usage(void)
 "  -m <mode>: copy mode: h2g, g2h, g2g, p2p, h2gfp (default: h2g)\n"
 "   - h2gfp: host to gpu from peer\n"
 "  -t <host memory type>: paged, locked, uvm, uvm_r (default: paged)\n"
+"  -a <access type>: set, ro, rw (default: set)\n"
 "  -k <stride>: stride size for GPU access (default: 64k)\n"
 "  -b <TB size>: TB size for GPU access (default: 1)\n"
 "  -r <thread size>: thread size for GPU access (default: 16)\n"
@@ -28,11 +29,16 @@ typedef enum {
 } mode_copy_t;
 
 typedef enum {
-	HMALLOC_PAGED, HMALLOC_LOCKED, HMALLOC_UVM, HMALLOC_UVM_R
+	HMALLOC_PAGED, HMALLOC_LOCKED, HMALLOC_UVM
 } mode_hmalloc_t;
+
+typedef enum {
+	ACCESS_SET, ACCESS_RO, ACCESS_RW
+} mode_access_t;
 
 static mode_copy_t	mode_copy = HOST_TO_GPU;
 static mode_hmalloc_t	mode_hmalloc = HMALLOC_PAGED;
+static mode_access_t	mode_access = ACCESS_SET;
 
 static unsigned char	*mem_gpu1;
 static unsigned char	*mem_gpu2;
@@ -70,7 +76,7 @@ reading_by_cpu(unsigned char *mem)
 static void
 copying_by_cpu(unsigned char *mem)
 {
-	if (mode_hmalloc == HMALLOC_UVM_R)
+	if (mode_access == ACCESS_RO)
 		reading_by_cpu(mem);
 	else
 		touching_by_cpu(mem);
@@ -115,13 +121,40 @@ reading_by_gpu(unsigned char *mem)
 	cudaDeviceSynchronize();
 }
 
+static __global__ void
+manipulating(unsigned char *mem, unsigned copy_size, unsigned stride_gpu)
+{
+	unsigned	idx;
+	unsigned char	prev = 0;
+	unsigned	i;
+
+	idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+	for (i = idx * stride_gpu; i < copy_size; i += blockDim.x * stride_gpu) {
+		prev = mem[idx + i] = (unsigned char)(prev + mem[idx + i] * 2);
+	}
+}
+
+static void
+manipulating_by_gpu(unsigned char *mem)
+{
+	manipulating<<<n_tb, n_threads>>>(mem, copy_size, stride_gpu);
+	cudaDeviceSynchronize();
+}
+
 static void
 copying_by_gpu(unsigned char *mem)
 {
-	if (mode_hmalloc == HMALLOC_UVM_R)
+	switch (mode_access) {
+	case ACCESS_RO:
 		reading_by_gpu(mem);
-	else
+	case ACCESS_RW:
+		manipulating_by_gpu(mem);
+		break;
+	default:
 		touching_by_gpu(mem);
+		break;
+	}
 }
 
 static mode_copy_t
@@ -152,12 +185,25 @@ parse_mode_hmalloc(const char *arg)
 		return HMALLOC_LOCKED;
 	else if (strcmp(arg, "uvm") == 0)
 		return HMALLOC_UVM;
-	else if (strcmp(arg, "uvm_r") == 0)
-		return HMALLOC_UVM_R;
 
 	ERROR("invalid host memory allocation mode: %s", arg);
 
 	return HMALLOC_PAGED;
+}
+
+static mode_access_t
+parse_mode_access(const char *arg)
+{
+	if (strcmp(arg, "set") == 0)
+		return ACCESS_SET;
+	else if (strcmp(arg, "ro") == 0)
+		return ACCESS_RO;
+	else if (strcmp(arg, "rw") == 0)
+		return ACCESS_RW;
+
+	ERROR("invalid access mode: %s", arg);
+
+	return ACCESS_SET;
 }
 
 static void
@@ -165,7 +211,7 @@ parse_args(int argc, char *argv[])
 {
 	int	c;
 
-	while ((c = getopt(argc, argv, "s:m:t:k:b:r:hq")) != -1) {
+	while ((c = getopt(argc, argv, "s:m:t:a:k:b:r:hq")) != -1) {
 		switch (c) {
 		case 's':
 			copy_size = mb_parse_size(optarg, "copy size");
@@ -175,6 +221,9 @@ parse_args(int argc, char *argv[])
 			break;
 		case 't':
 			mode_hmalloc = parse_mode_hmalloc(optarg);
+			break;
+		case 'a':
+			mode_access = parse_mode_access(optarg);
 			break;
 		case 'k':
 			stride_gpu = mb_parse_size(optarg, "stride size");
@@ -255,7 +304,7 @@ copy_host_to_gpu_by_uvm(void)
 static unsigned
 copy_host_to_gpu(void)
 {
-	if (mode_hmalloc == HMALLOC_UVM || mode_hmalloc == HMALLOC_UVM_R)
+	if (mode_hmalloc == HMALLOC_UVM)
 		return copy_host_to_gpu_by_uvm();
 	else
 		return copy_host_to_gpu_by_memcpy();
@@ -294,7 +343,7 @@ copy_gpu_to_host_by_uvm(void)
 static unsigned
 copy_gpu_to_host(void)
 {
-	if (mode_hmalloc == HMALLOC_UVM || mode_hmalloc == HMALLOC_UVM_R)
+	if (mode_hmalloc == HMALLOC_UVM)
 		return copy_gpu_to_host_by_uvm();
 	else
 		return copy_gpu_to_host_by_memcpy();
@@ -344,7 +393,7 @@ copy_gpu_to_gpu_by_uvm(void)
 static unsigned
 copy_gpu_to_gpu(void)
 {
-	if (mode_hmalloc == HMALLOC_UVM || mode_hmalloc == HMALLOC_UVM_R)
+	if (mode_hmalloc == HMALLOC_UVM)
 		return copy_gpu_to_gpu_by_uvm();
 	else
 		return copy_gpu_to_gpu_by_memcpy();
@@ -364,7 +413,7 @@ main(int argc, char *argv[])
 		free(str_size);
 	}
 
-	if (mode_hmalloc == HMALLOC_UVM_R)
+	if (mode_access == ACCESS_RO)
 		CUDA_CHECK(cudaMallocManaged(&mem_uvm_dummy, sizeof(int)), "cudaMallocManaged");
 
 	switch (mode_copy) {
