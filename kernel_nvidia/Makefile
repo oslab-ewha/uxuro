@@ -1,123 +1,86 @@
+###########################################################################
+# This is the top level makefile for the NVIDIA Linux kernel module source
+# package.
 #
-# This Makefile was automatically generated; do not edit.
-#   Generated on '__HOST' on __DATE.
-#
+# To build: run `make modules`
+# To install the build kernel modules: run (as root) `make modules_install`
+###########################################################################
 
 ###########################################################################
-# Makefile for NVIDIA Linux GPU driver kernel modules
+# variables
 ###########################################################################
 
-# This makefile is read twice: when a user or nvidia-installer invokes
-# 'make', this file is read.  It then invokes the Linux kernel's
-# Kbuild.  Modern versions of Kbuild will then read the Kbuild file in
-# this directory.  However, old versions of Kbuild will instead read
-# this Makefile.  For backwards compatibility, when read by Kbuild
-# (recognized by KERNELRELEASE not being empty), do nothing but
-# include the Kbuild file in this directory.
+nv_kernel_o                = src/nvidia/$(OUTPUTDIR)/nv-kernel.o
+nv_kernel_o_binary         = kernel-open/nvidia/nv-kernel.o_binary
 
-ifneq ($(KERNELRELEASE),)
-  include $(src)/Kbuild
-else
+nv_modeset_kernel_o        = src/nvidia-modeset/$(OUTPUTDIR)/nv-modeset-kernel.o
+nv_modeset_kernel_o_binary = kernel-open/nvidia-modeset/nv-modeset-kernel.o_binary
 
-  # Determine the location of the Linux kernel source tree, and of the
-  # kernel's output tree.  Use this to invoke Kbuild, and pass the paths
-  # to the source and output trees to NVIDIA's Kbuild file via
-  # NV_KERNEL_{SOURCES,OUTPUT}.
+###########################################################################
+# rules
+###########################################################################
 
-  ifdef SYSSRC
-    KERNEL_SOURCES := $(SYSSRC)
-  else
-    KERNEL_UNAME ?= $(shell uname -r)
-    KERNEL_MODLIB := /lib/modules/$(KERNEL_UNAME)
-    KERNEL_SOURCES := $(shell test -d $(KERNEL_MODLIB)/source && echo $(KERNEL_MODLIB)/source || echo $(KERNEL_MODLIB)/build)
-  endif
+include utils.mk
 
-  KERNEL_OUTPUT := $(KERNEL_SOURCES)
-  KBUILD_PARAMS :=
+.PHONY: all
+all: modules
 
-  ifdef SYSOUT
-    ifneq ($(SYSOUT), $(KERNEL_SOURCES))
-      KERNEL_OUTPUT := $(SYSOUT)
-      KBUILD_PARAMS := KBUILD_OUTPUT=$(KERNEL_OUTPUT)
-    endif
-  else
-    KERNEL_UNAME ?= $(shell uname -r)
-    KERNEL_MODLIB := /lib/modules/$(KERNEL_UNAME)
-    ifeq ($(KERNEL_SOURCES), $(KERNEL_MODLIB)/source)
-      KERNEL_OUTPUT := $(KERNEL_MODLIB)/build
-      KBUILD_PARAMS := KBUILD_OUTPUT=$(KERNEL_OUTPUT)
-    endif
-  endif
+###########################################################################
+# nv-kernel.o is the OS agnostic portion of nvidia.ko
+###########################################################################
 
-  CC ?= cc
+.PHONY: $(nv_kernel_o)
+$(nv_kernel_o):
+	$(MAKE) -C src/nvidia
 
-  ifndef ARCH
-    ARCH := $(shell uname -m | sed -e 's/i.86/i386/' \
-      -e 's/armv[0-7]\w\+/arm/' \
-      -e 's/aarch64/arm64/' \
-      -e 's/ppc64le/powerpc/' \
-    )
-  endif
+$(nv_kernel_o_binary): $(nv_kernel_o)
+	cd $(dir $@) && ln -sf ../../$^ $(notdir $@)
 
-  NV_KERNEL_MODULES ?= $(wildcard nvidia nvidia-uvm nvidia-modeset nvidia-drm nvidia-vgpu-vfio)
-  NV_KERNEL_MODULES := $(filter-out $(NV_EXCLUDE_KERNEL_MODULES), \
-                                    $(NV_KERNEL_MODULES))
-  NV_VERBOSE ?=
-  SPECTRE_V2_RETPOLINE ?= 0
 
-  ifeq ($(NV_VERBOSE),1)
-    KBUILD_PARAMS += V=1
-  endif
-  KBUILD_PARAMS += -C $(KERNEL_SOURCES) M=$(CURDIR)
-  KBUILD_PARAMS += ARCH=$(ARCH)
-  KBUILD_PARAMS += NV_KERNEL_SOURCES=$(KERNEL_SOURCES)
-  KBUILD_PARAMS += NV_KERNEL_OUTPUT=$(KERNEL_OUTPUT)
-  KBUILD_PARAMS += NV_KERNEL_MODULES="$(NV_KERNEL_MODULES)"
-  KBUILD_PARAMS += INSTALL_MOD_DIR=kernel/drivers/video
-  KBUILD_PARAMS += NV_SPECTRE_V2=$(SPECTRE_V2_RETPOLINE)
+###########################################################################
+# nv-modeset-kernel.o is the OS agnostic portion of nvidia-modeset.ko
+###########################################################################
 
-  .PHONY: modules module clean clean_conftest modules_install
-  modules clean modules_install:
-	@$(MAKE) "CC=$(CC)" $(KBUILD_PARAMS) $@
-	@if [ "$@" = "modules" ]; then \
-	  for module in $(NV_KERNEL_MODULES); do \
-	    if [ -x split-object-file.sh ]; then \
-	      ./split-object-file.sh $$module.ko; \
-	    fi; \
-	  done; \
-	fi
+.PHONY: $(nv_modeset_kernel_o)
+$(nv_modeset_kernel_o):
+	$(MAKE) -C src/nvidia-modeset
 
-  # Compatibility target for scripts that may be directly calling the
-  # "module" target from the old build system.
+$(nv_modeset_kernel_o_binary): $(nv_modeset_kernel_o)
+	cd $(dir $@) && ln -sf ../../$^ $(notdir $@)
 
-  module: modules
 
-  # Check if the linker script module-common.lds exists. If it does,
-  # pass that as a linker option (via variable NV_MODULE_COMMON_SCRIPT)
-  # while building the kernel interface object file. This script does some
-  # processing on the module symbols on which the Linux kernel's module
-  # resolution is dependent and hence must be used whenever present.
+###########################################################################
+# After the OS agnostic portions are built, descend into kernel-open/ and build
+# the kernel modules with kbuild.
+###########################################################################
 
-  LD_SCRIPT ?= $(KERNEL_SOURCES)/scripts/module-common.lds
-  NV_MODULE_COMMON_SCRIPT := $(if $(wildcard $(LD_SCRIPT)),-T $(LD_SCRIPT))
+.PHONY: modules
+modules: $(nv_kernel_o_binary) $(nv_modeset_kernel_o_binary)
+	$(MAKE) -C kernel-open modules
 
-  # Use $* to match the stem % in the kernel interface file %-linux.o. Replace
-  # "nv" with "nvidia" in $* as appropriate: e.g. nv-modeset-linux.o links
-  # nvidia-modeset.mod.o and nvidia-modeset/nv-modeset-interface.o. The kernel
-  # interface file must have the .mod.o object linked into it: otherwise, the
-  # kernel module produced by linking the interface against its corresponding
-  # core object file will not be loadable. The .mod.o file is built as part of
-  # the MODPOST process (stage 2),  so the rule to build the kernel interface
-  # cannot be defined in the *Kbuild files, which are only used during stage 1.
+###########################################################################
+# Install the built kernel modules using kbuild.
+###########################################################################
 
-  %-linux.o: modules
-	$(LD) $(NV_MODULE_COMMON_SCRIPT) -r -o $@ \
-	  $(subst nv,nvidia,$*).mod.o $(subst nv,nvidia,$*)/$*-interface.o
+.PHONY: modules_install
+modules_install:
+	$(MAKE) -C kernel-open modules_install
 
-  # Kbuild's "clean" rule won't clean up the conftest headers on its own, and
-  # clean-dirs doesn't appear to work as advertised.
-  clean_conftest:
-	$(RM) -r conftest
-  clean: clean_conftest
+###########################################################################
+# clean
+###########################################################################
 
-endif # KERNELRELEASE
+.PHONY: clean
+clean: nvidia.clean nvidia-modeset.clean kernel-open.clean
+
+.PHONY: nvidia.clean
+nvidia.clean:
+	$(MAKE) -C src/nvidia clean
+
+.PHONY: nvidia-modeset.clean
+nvidia-modeset.clean:
+	$(MAKE) -C src/nvidia-modeset clean
+
+.PHONY: kernel-open.clean
+kernel-open.clean:
+	$(MAKE) -C kernel-open clean

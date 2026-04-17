@@ -10,21 +10,21 @@ example applications, see the [README.md](examples/README.md) file in the
 *examples* folder.
 
 ### Install UXU kernel driver
-UXU kernel driver is a kind of modified NVidia UVM(Unified Virtual Memory) in the same way by DRAGON. NVidia 440.82 kernel source is used as a codebase for our driver. Below installation procedure assumes Ubuntu 18.04. 
+UXU kernel driver is a kind of modified NVidia UVM(Unified Virtual Memory) in the same way by DRAGON. NVidia 545.23.08 kernel source is used as a codebase for our driver. Below installation procedure assumes Ubuntu 22.04.
 
 1. Prepare linux kernel build environment
-    Most 4.15.x would be fine. One of tested versions is 4.15.0.140
+   Most 5.4.x would be fine. One of tested versions is 5.4.0.216
 
 2. Build kernel modules
-     ```
-     # cd kernel_nvidia
-     # make -C /lib/modules/4.15.0-140-generic/build M=$PWD
    ```
-     After successful build, several kernel modules will be generated. Two modules `nvidia.ko` and `nvidia-uvm.ko` are required to run UXU.
+   # cd kernel_nvidia
+   # SYSSRC=/lib/modules/5.4.0-216-generic/build IGNORE_CC_MISMATCH=1 make
+   ```
+   After successful build, several kernel modules will be generated. Two modules `nvidia.ko` and `nvidia-uvm.ko` are required to run UXU.
 
 ### Install libuxu library and examples
    User-land library and examples can built with autotools.
    ```
-  # ./configure
-  # make
-  ```
+   # ./configure
+   # make
+   ```
